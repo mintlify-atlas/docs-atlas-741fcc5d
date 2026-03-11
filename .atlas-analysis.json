@@ -1,0 +1,161 @@
+{
+  "projectType": "general",
+  "projectName": "HayBox",
+  "projectDescription": "Modular cross-platform firmware for digital or mixed analog/digital game controllers",
+  "theme": "aspen",
+  "primaryColor": "#6cb4bc",
+  "lightColor": "#2a4958",
+  "darkColor": "#98f6f9",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "building-from-source"
+            ]
+          },
+          {
+            "group": "Usage",
+            "pages": [
+              "usage/button-holds",
+              "usage/communication-backends",
+              "usage/game-modes",
+              "usage/dolphin-setup"
+            ]
+          },
+          {
+            "group": "Hardware Support",
+            "pages": [
+              "hardware/supported-controllers",
+              "hardware/pinouts",
+              "hardware/rp2040",
+              "hardware/avr"
+            ]
+          },
+          {
+            "group": "Troubleshooting",
+            "pages": [
+              "troubleshooting"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Customization",
+        "groups": [
+          {
+            "group": "Configuration",
+            "pages": [
+              "customization/console-selection",
+              "customization/mode-selection",
+              "customization/socd"
+            ]
+          },
+          {
+            "group": "Creating Custom Modes",
+            "pages": [
+              "customization/controller-modes",
+              "customization/keyboard-modes"
+            ]
+          },
+          {
+            "group": "Input Sources",
+            "pages": [
+              "customization/input-sources",
+              "customization/dual-core"
+            ]
+          },
+          {
+            "group": "Mode-Specific Features",
+            "pages": [
+              "customization/melee-features",
+              "customization/projectm-features"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core Classes",
+            "pages": [
+              "api/controller-mode",
+              "api/keyboard-mode",
+              "api/input-source",
+              "api/communication-backend"
+            ]
+          },
+          {
+            "group": "Game Modes",
+            "pages": [
+              "api/modes/melee20button",
+              "api/modes/melee18button",
+              "api/modes/projectm",
+              "api/modes/ultimate",
+              "api/modes/fgc",
+              "api/modes/rivals"
+            ]
+          },
+          {
+            "group": "Input Sources",
+            "pages": [
+              "api/input/gpio-button",
+              "api/input/switch-matrix",
+              "api/input/nunchuk",
+              "api/input/gamecube-controller"
+            ]
+          },
+          {
+            "group": "Communication",
+            "pages": [
+              "api/comms/xinput",
+              "api/comms/dinput",
+              "api/comms/gamecube",
+              "api/comms/n64",
+              "api/comms/switch"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Cross-platform support for RP2040 and AVR microcontrollers",
+    "Multiple communication backends (XInput, DInput, GameCube, N64, Switch)",
+    "Pre-built game modes for Melee, Ultimate, Project M, FGC, and more",
+    "Fully customizable SOCD cleaning with multiple resolution methods",
+    "Mixed input support (GPIO buttons, switch matrix, Nunchuk, GameCube controller)",
+    "Dual-core processing on RP2040 for ultra-low latency",
+    "Easy mode switching without unplugging",
+    "Automatic console detection"
+  ],
+  "publicApiSurface": [
+    "Melee20Button",
+    "Melee18Button",
+    "ProjectM",
+    "Ultimate",
+    "FgcMode",
+    "RivalsOfAether",
+    "Rivals2",
+    "DefaultKeyboardMode",
+    "GpioButtonInput",
+    "SwitchMatrixInput",
+    "NunchukInput",
+    "GamecubeControllerInput",
+    "XInputBackend",
+    "DInputBackend",
+    "GamecubeBackend",
+    "N64Backend",
+    "SwitchBackend",
+    "ControllerMode",
+    "KeyboardMode",
+    "InputSource",
+    "CommunicationBackend"
+  ]
+}
