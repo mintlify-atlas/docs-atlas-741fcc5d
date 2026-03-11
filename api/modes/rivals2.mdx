@@ -1,0 +1,135 @@
+---
+title: 'Rivals2'
+description: 'Rivals of Aether 2 mode with optimized mechanics for the sequel'
+---
+
+# Rivals2
+
+The Rivals2 mode provides optimized input handling for Rivals of Aether 2, featuring improved diagonal coordinates, angled tilt support, and shield mechanics designed for the sequel's updated engine.
+
+## Constructor
+
+```cpp
+Rivals2::Rivals2()
+```
+
+Creates a new Rivals2 mode instance with SOCD cleaning configured for platform fighter gameplay.
+
+**Source:** `src/modes/Rivals2.cpp`
+
+## Button Layout
+
+Standard 20-button layout with Rivals 2-specific mappings:
+
+### Attack Buttons
+- **RT1 (A)** → A button (normal attacks)
+- **RF1 (B)** → B button (special attacks)
+- **RF2 (X)** → X button (jump)
+- **RF6 (Y+)** → Y button (short hop)
+- **RF3 (Z)** → R button (grab/parry)
+
+### Shield & Triggers
+- **LF4 (L)** → L trigger (digital)
+- **RF5 (R)** → R trigger (digital)
+- **RF7** → Left stick click (taunt)
+- **RF8** → L button (alternative mapping)
+
+### System Buttons
+- **MB1 (Start)** → Start
+- **MB2** → Home
+- **MB3** → Select
+
+### D-Pad Layer
+Hold **Mod X + Mod Y** to activate D-Pad layer:
+- **RT4 (C-Up)** → D-Pad Up
+- **RT2 (C-Down)** → D-Pad Down
+- **RT3 (C-Left)** → D-Pad Left
+- **RT5 (C-Right)** → D-Pad Right
+
+## Analog Stick Mechanics
+
+### Diagonal Coordinates
+
+The mode uses optimized diagonal values designed for Rivals 2 mechanics:
+
+**Without shield button pressed:**
+```cpp
+X: 128 ± 92  // 0.78 in-game (allows crouch tilts)
+Y: 128 ± 96  // 0.83 in-game (enables fast fall)
+```
+
+**With shield button pressed (L or R):**
+```cpp
+X: 128 ± 92  // 0.77 in-game
+Y: 128 ± 92  // 0.77 in-game (prevents spot dodge on ground)
+```
+
+### Angled Tilts (Mod X)
+
+When holding **Mod X**, angled tilts use precise coordinates:
+
+```cpp
+X: 128 ± 69  // ~0.506 in-game
+Y: 128 ± 53  // ~0.31 in-game
+```
+
+These angles are optimized for directional tilt attacks in Rivals 2.
+
+### Analog Range
+
+Full analog range for maximum precision:
+- **Minimum:** 0
+- **Neutral:** 128
+- **Maximum:** 255
+
+## Nunchuk Support
+
+If a Wii Nunchuk is connected:
+
+- **Nunchuk C** → Lightshield (analog value 49)
+- **Nunchuk Z** → L trigger (digital)
+- **Nunchuk stick** → Left analog stick
+
+Without Nunchuk, L trigger uses LF4 button.
+
+## Special Features
+
+### Shield Mechanics
+
+The mode detects when shield buttons (L or R) are pressed and adjusts diagonal coordinates accordingly to prevent unintended spot dodges while holding shield on the ground.
+
+### Crouch Tilt Optimization
+
+The slightly reduced diagonal X-axis value (0.78) allows for crouch tilts and crouch turn-around tilts, which are important techniques in Rivals 2.
+
+### Fast Fall Support
+
+The diagonal Y-axis value of 0.83 (above 0.8 threshold) ensures fast fall can be triggered reliably from diagonal inputs.
+
+## Usage Example
+
+```cpp
+#include "modes/Rivals2.hpp"
+
+// Create Rivals2 mode
+Rivals2 *rivals2_mode = new Rivals2();
+
+// Use with a communication backend
+backend->SetGameMode(rivals2_mode);
+```
+
+## Differences from RivalsOfAether
+
+| Feature | RivalsOfAether | Rivals2 |
+|---------|----------------|---------|
+| Diagonal coordinates | Standard platform fighter | Optimized for Rivals 2 engine |
+| Shield detection | Not implemented | Adjusts diagonals when shielding |
+| Angled tilts | Basic modifier angles | Precise 0.506×0.31 angles |
+| Stick click mapping | Right stick click | Left stick click (taunt) |
+| Engine optimization | Rivals 1 mechanics | Rivals 2 mechanics |
+
+## See Also
+
+- [RivalsOfAether](/api/modes/rivals) - Rivals of Aether 1 mode
+- [Ultimate](/api/modes/ultimate) - Similar platform fighter mode
+- [ControllerMode](/api/controller-mode) - Base class reference
