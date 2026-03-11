@@ -1,0 +1,163 @@
+---
+title: XInputBackend
+description: XInput (Xbox 360) USB communication backend for PC gaming
+icon: gamepad
+---
+
+## Overview
+
+The `XInputBackend` class provides XInput protocol support, allowing HayBox controllers to be recognized as Xbox 360 controllers on PC. This is the preferred backend for most PC games and emulators that support XInput.
+
+<Note>
+  XInput provides better compatibility with modern PC games compared to DInput, with native support for analog triggers and rumble.
+</Note>
+
+## Platform Support
+
+- **Raspberry Pi Pico**: ✅ Supported
+- **Arduino (AVR)**: ❌ Not supported
+
+## Constructor
+
+```cpp
+XInputBackend(
+    InputState &inputs,
+    InputSource **input_sources,
+    size_t input_source_count
+)
+```
+
+<ParamField path="inputs" type="InputState&" required>
+  Reference to the global input state structure that tracks all button and analog input values.
+</ParamField>
+
+<ParamField path="input_sources" type="InputSource**" required>
+  Array of pointers to input source objects (GPIO buttons, analog sticks, etc.) that provide input data.
+</ParamField>
+
+<ParamField path="input_source_count" type="size_t" required>
+  Number of elements in the `input_sources` array.
+</ParamField>
+
+## Key Features
+
+### USB Device Identity
+
+The backend configures the USB device to appear as:
+- **Vendor ID**: `0x0738` (Mad Catz)
+- **Product ID**: `0x4726` (Xbox 360 Controller)
+
+### Button Mapping
+
+XInput supports the following buttons:
+- Face buttons: A, B, X, Y
+- Shoulder buttons: LB, RB
+- Analog triggers: LT, RT (0-255)
+- D-pad: Up, Down, Left, Right
+- System buttons: Start, Back, Home
+- Stick clicks: LS, RS
+
+### Analog Inputs
+
+- **Left Stick**: X/Y axes (16-bit signed)
+- **Right Stick**: X/Y axes (16-bit signed)
+- **Triggers**: LT/RT (8-bit unsigned, 0-255)
+
+## Configuration
+
+To use XInput as your primary backend, configure it in your device config:
+
+```cpp
+CommunicationBackendConfig backend_config = {
+    .backend_id = COMMS_BACKEND_XINPUT,
+};
+```
+
+## Backend ID
+
+```cpp
+CommunicationBackendId BackendId() {
+    return COMMS_BACKEND_XINPUT;
+}
+```
+
+Returns `COMMS_BACKEND_XINPUT` to identify this backend type.
+
+## SendReport Method
+
+```cpp
+void SendReport();
+```
+
+The `SendReport()` method handles the complete input processing pipeline:
+
+1. Scans inputs at three different speeds (slow, medium, fast)
+2. Waits for XInput device to be ready
+3. Updates output state based on game mode logic
+4. Maps outputs to XInput report format
+5. Sends the report via USB
+
+### Input Scanning
+
+The backend uses a three-stage scanning approach:
+- **SLOW**: Updates infrequently-changing inputs
+- **MEDIUM**: Updates moderately responsive inputs
+- **FAST**: Updates after USB ready signal for minimal latency
+
+## Usage Example
+
+```cpp
+// In your config file
+#include "comms/XInputBackend.hpp"
+
+static InputState inputs;
+static InputSource *input_sources[] = { &gpio_input };
+size_t input_source_count = 1;
+
+// Create the backend
+XInputBackend xinput_backend(
+    inputs,
+    input_sources,
+    input_source_count
+);
+
+void loop() {
+    // Send controller state to PC
+    xinput_backend.SendReport();
+}
+```
+
+## Implementation Details
+
+### Report Structure
+
+The backend uses `xinput_report_t` which includes:
+- 16-bit signed values for stick axes
+- 8-bit unsigned values for analog triggers
+- Digital button states as boolean flags
+- D-pad directions as individual buttons
+
+### Analog Conversion
+
+Stick values are converted from 8-bit (0-255) to 16-bit signed (-32768 to 32767):
+
+```cpp
+_report.lx = (_outputs.leftStickX - 128) * 65535 / 255 + 128;
+_report.ly = (_outputs.leftStickY - 128) * 65535 / 255 + 128;
+```
+
+### Trigger Handling
+
+Analog triggers support both digital and analog modes:
+- If digital trigger is pressed: Reports 255 (full press)
+- Otherwise: Reports analog value (0-255)
+
+<Info>
+  The backend automatically handles Serial port management, closing and reopening it around XInput initialization.
+</Info>
+
+## See Also
+
+- [DInputBackend](/api/comms/dinput) - DirectInput alternative for older PC games
+- [CommunicationBackend](/api/communication-backend) - Base class for all backends
+- [Input Sources](/customization/input-sources) - Configuring input devices

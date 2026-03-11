@@ -1,0 +1,305 @@
+---
+title: NintendoSwitchBackend
+description: Nintendo Switch USB communication backend using Pro Controller protocol
+icon: gamepad-modern
+---
+
+## Overview
+
+The `NintendoSwitchBackend` class provides Nintendo Switch Pro Controller emulation over USB. The controller identifies as a Hori Pokken Tournament Pro Pad, which is officially licensed and doesn't require pairing.
+
+<Note>
+  This backend uses the Hori Pokken controller USB descriptor for immediate plug-and-play compatibility without Bluetooth pairing.
+</Note>
+
+## Platform Support
+
+- **Raspberry Pi Pico**: ✅ Supported
+- **Arduino (AVR)**: ❌ Not supported
+
+## Constructor
+
+```cpp
+NintendoSwitchBackend(
+    InputState &inputs,
+    InputSource **input_sources,
+    size_t input_source_count
+)
+```
+
+<ParamField path="inputs" type="InputState&" required>
+  Reference to the global input state structure that tracks all button and analog input values.
+</ParamField>
+
+<ParamField path="input_sources" type="InputSource**" required>
+  Array of pointers to input source objects (GPIO buttons, analog sticks, etc.) that provide input data.
+</ParamField>
+
+<ParamField path="input_source_count" type="size_t" required>
+  Number of elements in the `input_sources` array.
+</ParamField>
+
+## USB Device Identity
+
+The backend configures the USB device to appear as:
+- **Manufacturer**: "HORI CO.,LTD."
+- **Product**: "POKKEN CONTROLLER"
+- **Version**: "1.0"
+- **Vendor ID**: `0x0F0D` (Hori)
+- **Product ID**: `0x0092` (Pokken Tournament Pro Pad)
+
+<Info>
+  Using the Hori Pokken controller identity allows the device to work immediately without the complex pairing process required for standard Pro Controllers.
+</Info>
+
+## RegisterDescriptor Method
+
+```cpp
+static void RegisterDescriptor();
+```
+
+Registers the HID descriptor with the USB composite HID system. This must be called before creating the backend instance.
+
+```cpp
+// In your setup code, before creating the backend
+NintendoSwitchBackend::RegisterDescriptor();
+```
+
+## Button Mapping
+
+The Switch backend supports all standard Pro Controller buttons:
+
+### Face Buttons
+- A, B, X, Y
+
+### Shoulder Buttons
+- L, R (shoulder)
+- ZL, ZR (trigger)
+
+### System Buttons
+- Plus (Start)
+- Minus (Select)
+- Home
+- Capture
+
+### Stick Buttons
+- L3 (left stick click)
+- R3 (right stick click)
+
+### D-pad
+Implemented as an 8-direction hat switch:
+- Up, Down, Left, Right
+- Diagonal directions (Up-Right, Down-Right, Down-Left, Up-Left)
+- Centered (no direction)
+
+## Analog Inputs
+
+### Stick Axes
+- **Left Stick**: X/Y (8-bit, 0-255)
+- **Right Stick**: X/Y (8-bit, 0-255)
+
+### Deadzone and Radius Filtering
+
+The backend applies sophisticated filtering to analog inputs:
+
+```cpp
+const uint8_t DEADZONE = 11;
+const int RADIUS = 256;
+
+_report.lx = apply_radius(apply_deadzone(_outputs.leftStickX, DEADZONE, true), RADIUS);
+_report.ly = 255 - apply_radius(apply_deadzone(_outputs.leftStickY, DEADZONE, true), RADIUS);
+```
+
+- **Deadzone**: 11-unit deadzone prevents drift
+- **Radius limiting**: Ensures circular gate behavior
+- **Y-axis inversion**: Matches Switch coordinate system
+
+<Info>
+  The deadzone and radius filters ensure smooth analog behavior and prevent unintended inputs from stick drift or calibration issues.
+</Info>
+
+## Configuration
+
+To use the Switch backend as your primary backend:
+
+```cpp
+CommunicationBackendConfig backend_config = {
+    .backend_id = COMMS_BACKEND_NINTENDO_SWITCH,
+};
+```
+
+## Backend ID
+
+```cpp
+CommunicationBackendId BackendId() {
+    return COMMS_BACKEND_NINTENDO_SWITCH;
+}
+```
+
+## SendReport Method
+
+```cpp
+void SendReport();
+```
+
+The `SendReport()` method handles the complete input processing pipeline:
+
+1. Scans inputs at three different speeds (slow, medium, fast)
+2. Waits for USB HID device to be ready
+3. Updates output state based on game mode logic
+4. Applies deadzone and radius filtering to analog inputs
+5. Maps outputs to Switch report format
+6. Sends the report via USB
+
+```cpp
+ScanInputs(InputScanSpeed::SLOW);
+ScanInputs(InputScanSpeed::MEDIUM);
+
+while (!TUCompositeHID::_usb_hid.ready()) {
+    tight_loop_contents();
+}
+
+ScanInputs(InputScanSpeed::FAST);
+UpdateOutputs();
+
+TUCompositeHID::_usb_hid.sendReport(_report_id, &_report, sizeof(switch_gamepad_report_t));
+```
+
+## Report Structure
+
+The `switch_gamepad_report_t` structure contains:
+
+```cpp
+typedef struct __attribute__((packed, aligned(1))) {
+    bool y : 1;
+    bool b : 1;
+    bool a : 1;
+    bool x : 1;
+    bool l : 1;
+    bool r : 1;
+    bool zl : 1;
+    bool zr : 1;
+    bool minus : 1;
+    bool plus : 1;
+    bool l3 : 1;
+    bool r3 : 1;
+    bool home : 1;
+    bool capture : 1;
+    uint8_t reserved0 : 2;
+    switch_gamepad_hat_t hat;
+    uint8_t lx;
+    uint8_t ly;
+    uint8_t rx;
+    uint8_t ry;
+    uint8_t reserved1;
+} switch_gamepad_report_t;
+```
+
+## Hat Switch Positions
+
+The D-pad is reported as a hat switch with the following enum values:
+
+```cpp
+typedef enum {
+    SWITCH_HAT_UP,
+    SWITCH_HAT_UP_RIGHT,
+    SWITCH_HAT_RIGHT,
+    SWITCH_HAT_DOWN_RIGHT,
+    SWITCH_HAT_DOWN,
+    SWITCH_HAT_DOWN_LEFT,
+    SWITCH_HAT_LEFT,
+    SWITCH_HAT_UP_LEFT,
+    SWITCH_HAT_CENTERED,
+} switch_gamepad_hat_t;
+```
+
+The `GetHatPosition()` helper method calculates the correct hat value:
+
+```cpp
+static switch_gamepad_hat_t GetHatPosition(bool left, bool right, bool down, bool up);
+```
+
+## Usage Example
+
+```cpp
+#include "comms/NintendoSwitchBackend.hpp"
+
+// Register the descriptor during initialization
+void setup() {
+    static InputState inputs;
+    
+    // Register Switch HID descriptor
+    NintendoSwitchBackend::RegisterDescriptor();
+    
+    static InputSource *input_sources[] = { &gpio_input };
+    size_t input_source_count = 1;
+    
+    // Create the backend
+    static NintendoSwitchBackend switch_backend(
+        inputs,
+        input_sources,
+        input_source_count
+    );
+    
+    // Initialize backends array
+    // ...
+}
+
+void loop() {
+    // Send controller state to Switch
+    switch_backend.SendReport();
+}
+```
+
+## HID Descriptor Details
+
+The backend uses a custom HID descriptor that matches the Hori Pokken controller:
+
+- **Report ID**: 0 (no report ID)
+- **Button Map**: 16-bit bitfield
+- **Hat Switch**: 4-bit value (8 directions + center)
+- **Analog Axes**: 4 × 8-bit values (LX, LY, RX, RY)
+- **Vendor Input**: 1 byte (reserved)
+- **Output Report**: 8 bytes (for rumble/LEDs, handled by host)
+
+## Advantages
+
+- **No pairing required**: Works immediately when plugged in
+- **Official protocol**: Uses licensed controller identity
+- **Full feature support**: All buttons and analog inputs
+- **Plug and play**: No driver installation needed
+
+## Limitations
+
+- **No wireless**: USB connection only (Hori controller is wired)
+- **No advanced features**: No gyro, accelerometer, or NFC
+- **No rumble**: Hori controller doesn't support HD rumble
+- **No amiibo**: No NFC reader functionality
+
+<Warning>
+  This backend emulates a wired Hori controller, so features like motion controls, rumble, and amiibo scanning are not available.
+</Warning>
+
+## Troubleshooting
+
+### Switch doesn't recognize the controller
+- Ensure USB cable supports data (not charge-only)
+- Try a different USB port on the dock
+- Verify firmware was built with Switch backend enabled
+- Check that `RegisterDescriptor()` was called before backend creation
+
+### Analog sticks drifting
+- Adjust the deadzone value if needed
+- Calibrate input sources
+- Check for proper pull-up/pull-down resistors on analog pins
+
+### Buttons not responding
+- Verify button mapping in your input mode
+- Check that input sources are properly configured
+- Test with a simpler input mode to isolate the issue
+
+## See Also
+
+- [XInputBackend](/api/comms/xinput) - For PC gaming
+- [DInputBackend](/api/comms/dinput) - For universal PC compatibility
+- [Input Sources](/customization/input-sources) - Configuring input devices

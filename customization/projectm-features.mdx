@@ -1,0 +1,329 @@
+---
+title: Project M/Project+ Features
+description: Configuration options specific to Project M and Project+ modes
+---
+
+## Overview
+
+The ProjectM mode in HayBox includes specialized options to handle differences between Project M/Project+ and Melee mechanics, particularly around Z button behavior and movement options.
+
+## True Z Press Option
+
+### The Problem
+
+Project M and Project+ handle Z button presses differently than Melee:
+
+- **In Melee**: Z press = Lightshield + A, which can be used for L-canceling without causing tech lockout
+- **In PM/P+**: Z press triggers a tech, causing unwanted tech lockouts if used to L-cancel
+
+### The Solution
+
+HayBox provides the `true_z_press` option to control Z button behavior:
+
+```cpp
+// ProjectM.cpp - Lines 26-31
+if (_options.true_z_press || inputs.lt1) {
+    outputs.buttonR = inputs.rf3;  // Send actual Z press
+} else {
+    outputs.a = inputs.rt1 || inputs.rf3;  // Send A press instead
+}
+```
+
+<Tabs>
+  <Tab title="Default (true_z_press = false)">
+
+**Behavior**: Z button sends Lightshield + A macro
+
+```cpp
+// When Z (rf3) is pressed:
+outputs.a = inputs.rt1 || inputs.rf3;  // A button output
+
+// Lightshield is added via trigger analog:
+if (inputs.rf3 && !(inputs.lt1 || _options.true_z_press)) {
+    outputs.triggerRAnalog = 49;  // Lightshield analog value
+}
+```
+
+**Advantages**:
+
+- Safe L-canceling without tech lockout
+- Consistent behavior with Melee muscle memory
+- No need to change L-cancel timing
+
+**Limitations**:
+
+- Cannot use tether/grapple attacks
+- Cannot grab items with Z
+- Cannot use Z for aerial grabbing
+
+</Tab>
+  <Tab title="True Z Press (true_z_press = true)">
+
+**Behavior**: Z button sends actual Z input to the game
+
+```cpp
+outputs.buttonR = inputs.rf3;  // True Z press
+```
+
+**Advantages**:
+
+- Can use tether/grapple attacks (Link, Samus, Ivysaur, etc.)
+- Can grab items with Z
+- Full functionality of Z button
+
+**Limitations**:
+
+- Using Z to L-cancel will cause tech lockout
+- Must use L or R for L-canceling instead
+
+</Tab>
+</Tabs>
+
+### Mod X Override
+
+Regardless of the `true_z_press` setting, you can always force a true Z press by holding **Mod X + Z**:
+
+```cpp
+if (_options.true_z_press || inputs.lt1) {
+    outputs.buttonR = inputs.rf3;
+}
+```
+
+<Info>
+This allows you to use the safe L-cancel macro by default, but still access tether attacks when needed by holding Mod X.
+</Info>
+
+### Configuration
+
+<Accordion title="In config_defaults.hpp">
+
+```cpp
+const Config default_config = {
+    // ...
+    .project_m_options = {
+        .true_z_press = true,  // Set to false for lightshield + A macro
+        .disable_ledgedash_socd_override = false,
+    },
+    // ...
+};
+```
+
+This setting in `/HAL/pico/include/config_defaults.hpp` controls the default behavior on plugin.
+
+**Default value**: `true` (actual Z press for full functionality)
+
+</Accordion>
+
+<Accordion title="Mode activation binding">
+
+```cpp
+GameModeConfig {
+    .mode_id = MODE_PROJECT_M,
+    .socd_pairs_count = 4,
+    .socd_pairs = {
+        SocdPair { .button_dir1 = BTN_LF3, .button_dir2 = BTN_LF1, .socd_type = SOCD_2IP_NO_REAC },
+        SocdPair { .button_dir1 = BTN_LF2, .button_dir2 = BTN_RF4, .socd_type = SOCD_2IP_NO_REAC },
+        SocdPair { .button_dir1 = BTN_RT3, .button_dir2 = BTN_RT5, .socd_type = SOCD_2IP_NO_REAC },
+        SocdPair { .button_dir1 = BTN_RT2, .button_dir2 = BTN_RT4, .socd_type = SOCD_2IP_NO_REAC },
+    },
+    .button_remapping_count = 0,
+    .activation_binding_count = 3,
+    .activation_binding = { BTN_LT1, BTN_MB1, BTN_LF3 },  // Start + Mod X + Left
+}
+```
+
+By default, hold **Start + Mod X + Left** on plugin or during runtime to activate Project M mode.
+
+</Accordion>
+
+## Ledgedash Maximum Jump Trajectory
+
+Similar to Melee modes, ProjectM mode includes the ledgedash SOCD override:
+
+```cpp
+// ProjectM.cpp - Lines 195-199
+if (!_options.disable_ledgedash_socd_override && _horizontal_socd && !directions.vertical &&
+    !shield_button_pressed) {
+    outputs.leftStickX = 128 + (directions.x * 100);  // 1.0 cardinal
+}
+```
+
+### How It Works
+
+1. When **left and right are both held** (horizontal SOCD)
+2. **No vertical direction** is held
+3. **No shield button** is pressed
+4. The stick outputs a **perfect 1.0 cardinal** (value 100 from center)
+
+**Purpose**: Provides maximum horizontal jump trajectory for ledgedashing, regardless of modifiers held.
+
+<Warning>
+Note the difference from Melee: Project M's ledgedash override uses coordinate value 100 (10000 in game units) compared to Melee's 80 (8000). This is because PM/P+ uses extended stick range.
+</Warning>
+
+### Configuration
+
+The `ledgedash_max_jump_traj` option mentioned in the README controls whether this behavior is active:
+
+```cpp
+.project_m_options = {
+    .true_z_press = true,
+    .disable_ledgedash_socd_override = false,  // Set to true to disable
+}
+```
+
+<Note>
+If you change the SOCD mode to 2IP (with reactivation), you should set `disable_ledgedash_socd_override = true` for a smooth gameplay experience.
+</Note>
+
+## Project M Coordinate Ranges
+
+Project M/P+ modes use extended coordinate ranges compared to Melee:
+
+```cpp
+// ProjectM.cpp - Lines 3-5
+#define ANALOG_STICK_MIN 28
+#define ANALOG_STICK_NEUTRAL 128
+#define ANALOG_STICK_MAX 228
+```
+
+Compare to Melee:
+
+```cpp
+// Melee20Button.cpp - Lines 3-5
+#define ANALOG_STICK_MIN 48
+#define ANALOG_STICK_NEUTRAL 128
+#define ANALOG_STICK_MAX 208
+```
+
+**Ranges**:
+- **Melee**: 48-128-208 (160 total range)
+- **Project M**: 28-128-228 (200 total range)
+
+This extended range allows for more precise inputs and is used throughout the modifier system.
+
+## Modifier Coordinates
+
+### Mod X Modifiers
+
+```cpp
+// ProjectM.cpp - Lines 84-137
+if (inputs.lt1) {
+    if (directions.horizontal) {
+        outputs.leftStickX = 128 + (directions.x * 70);  // 7000
+    }
+    if (directions.vertical) {
+        outputs.leftStickY = 128 + (directions.y * 60);  // 6000
+    }
+
+    if (directions.diagonal) {
+        // Default MX Diagonal
+        outputs.leftStickX = 128 + (directions.x * 70);  // 7000
+        outputs.leftStickY = 128 + (directions.y * 34);  // 3400
+
+        if (inputs.rf1) {  // B button
+            outputs.leftStickX = 128 + (directions.x * 85);
+            outputs.leftStickY = 128 + (directions.y * 31);
+        }
+
+        if (inputs.rf5) {  // R button - Airdodge angle
+            outputs.leftStickX = 128 + (directions.x * 82);
+            outputs.leftStickY = 128 + (directions.y * 35);
+        }
+
+        // C-stick modifiers for additional angles
+        if (inputs.rt4) { outputs.leftStickY = 128 + (directions.y * 55); }
+        if (inputs.rt2) { outputs.leftStickY = 128 + (directions.y * 36); }
+        if (inputs.rt3) { outputs.leftStickY = 128 + (directions.y * 50); }
+        if (inputs.rt5) { outputs.leftStickY = 128 + (directions.y * 61); }
+    }
+}
+```
+
+### Mod Y Modifiers
+
+```cpp
+// ProjectM.cpp - Lines 140-183
+if (inputs.lt2) {
+    if (directions.horizontal) {
+        outputs.leftStickX = 128 + (directions.x * 35);  // 3500
+    }
+    if (directions.vertical) {
+        outputs.leftStickY = 128 + (directions.y * 70);  // 7000
+    }
+
+    if (directions.diagonal) {
+        outputs.leftStickX = 128 + (directions.x * 28);  // 2800
+        outputs.leftStickY = 128 + (directions.y * 58);  // 5800
+
+        // Various angle modifiers with B, R, and C-stick combinations
+        // ...
+    }
+}
+```
+
+## C-Stick ASDI Slideoff
+
+Project M mode includes a special ASDI slideoff angle for C-stick down + left/right:
+
+```cpp
+// ProjectM.cpp - Lines 189-193
+if (directions.cx != 0 && directions.cy == -1) {
+    // 3000 9875 = 30 78
+    outputs.rightStickX = 128 + (directions.cx * 35);
+    outputs.rightStickY = 128 + (directions.cy * 98);
+}
+```
+
+<Info>
+Note that C-up + C-left/right does NOT trigger ASDI slideoff, in case you want to implement C-stick nair in the future.
+</Info>
+
+## Custom Airdodge Angles
+
+Similar to Melee mode, Project M supports custom airdodge angles:
+
+```cpp
+// ProjectM.cpp - Lines 108-115
+if (inputs.rf5) {  // R button for airdodge
+    if (_options.has_custom_airdodge) {
+        outputs.leftStickX = 128 + (directions.x * _options.custom_airdodge.x);
+        outputs.leftStickY = 128 + (directions.y * _options.custom_airdodge.y);
+    } else {
+        outputs.leftStickX = 128 + (directions.x * 82);
+        outputs.leftStickY = 128 + (directions.y * 35);
+    }
+}
+```
+
+## When to Use Each Configuration
+
+<CardGroup cols={2}>
+  <Card title="true_z_press = false" icon="shield">
+    **Best for:**
+    - Characters without tether recovery
+    - Players who want Melee-like L-cancel behavior
+    - Avoiding tech lockout mistakes
+    
+    **Use Mod X + Z when you need tether/grab**
+  </Card>
+  
+  <Card title="true_z_press = true" icon="link">
+    **Best for:**
+    - Tether characters (Link, Samus, Ivysaur, etc.)
+    - Players comfortable L-canceling with L/R
+    - Full Z button functionality
+    
+    **Remember to use L/R for L-canceling**
+  </Card>
+</CardGroup>
+
+## Summary
+
+| Option | Default | Purpose |
+|--------|---------|----------|
+| `true_z_press` | `true` | Send actual Z press vs lightshield + A macro |
+| `disable_ledgedash_socd_override` | `false` | Enable 1.0 cardinal when L+R held |
+| `has_custom_airdodge` | `false` | Use custom airdodge coordinates |
+| Coordinate range | 28-228 | Extended range for precise inputs |
+| Mod X override | Always available | Hold Mod X + Z for true Z press |

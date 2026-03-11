@@ -1,0 +1,239 @@
+---
+title: 'GpioButtonInput'
+description: 'GPIO-based button input source for reading physical buttons connected directly to microcontroller pins'
+---
+
+## Overview
+
+`GpioButtonInput` is an input source that reads button states from GPIO pins with internal pull-up resistors. This is the most common input method for reading individual buttons that are wired directly to microcontroller pins.
+
+Buttons are read as active-low (pressed when pin reads LOW), utilizing internal pull-up resistors on each configured pin.
+
+## Class Declaration
+
+```cpp
+class GpioButtonInput : public InputSource {
+  public:
+    GpioButtonInput(const GpioButtonMapping *button_mappings, size_t button_count);
+    InputScanSpeed ScanSpeed();
+    void UpdateInputs(InputState &inputs);
+};
+```
+
+## Button Mapping Structure
+
+```cpp
+typedef struct {
+    Button button;  // Button identifier (BTN_LF1, BTN_RF1, etc.)
+    uint pin;       // GPIO pin number
+} GpioButtonMapping;
+```
+
+<ParamField path="button" type="Button" required>
+  The button identifier from the Button enum (e.g., `BTN_LF1`, `BTN_RF1`, `BTN_MB1`). See the [button reference](/hardware/pinouts#button-reference) for all available button identifiers.
+</ParamField>
+
+<ParamField path="pin" type="uint" required>
+  The GPIO pin number where the button is connected. Pin numbers are platform-specific (e.g., `0-28` on Pico, Arduino pin constants like `A0-A5`).
+</ParamField>
+
+## Constructor
+
+```cpp
+GpioButtonInput(const GpioButtonMapping *button_mappings, size_t button_count)
+```
+
+<ParamField path="button_mappings" type="const GpioButtonMapping*" required>
+  Pointer to an array of `GpioButtonMapping` structures that define which buttons are connected to which pins.
+</ParamField>
+
+<ParamField path="button_count" type="size_t" required>
+  The number of button mappings in the array. Typically calculated using `sizeof(button_mappings) / sizeof(GpioButtonMapping)`.
+</ParamField>
+
+## Methods
+
+### ScanSpeed()
+
+Returns `InputScanSpeed::FAST`, indicating this input source should be polled frequently.
+
+```cpp
+InputScanSpeed ScanSpeed();
+```
+
+<ResponseField name="return" type="InputScanSpeed">
+  Always returns `InputScanSpeed::FAST`
+</ResponseField>
+
+### UpdateInputs()
+
+Reads the current state of all configured GPIO pins and updates the input state.
+
+```cpp
+void UpdateInputs(InputState &inputs);
+```
+
+<ParamField path="inputs" type="InputState&" required>
+  Reference to the `InputState` structure to update with current button states.
+</ParamField>
+
+## Configuration Example
+
+### Basic GPIO Button Configuration
+
+```cpp config.cpp
+#include "input/GpioButtonInput.hpp"
+#include "core/state.hpp"
+
+// Define button-to-pin mappings
+const GpioButtonMapping button_mappings[] = {
+    // Left face buttons
+    { BTN_LF1, 4  },
+    { BTN_LF2, 0  },
+    { BTN_LF3, 1  },
+    { BTN_LF4, 16 },
+    
+    // Left thumb buttons
+    { BTN_LT1, 5 },
+    { BTN_LT2, 6 },
+    
+    // Middle buttons
+    { BTN_MB1, 7 },
+    
+    // Right thumb buttons
+    { BTN_RT1, 15 },
+    { BTN_RT2, 12 },
+    { BTN_RT3, 9  },
+    { BTN_RT4, 8  },
+    { BTN_RT5, 14 },
+    
+    // Right face buttons
+    { BTN_RF1, A2 },  // Analog pin on Arduino
+    { BTN_RF2, A1 },
+    { BTN_RF3, A0 },
+    { BTN_RF4, 13 },
+};
+
+const size_t button_count = sizeof(button_mappings) / sizeof(GpioButtonMapping);
+
+// Create the input source
+static GpioButtonInput gpio_input(button_mappings, button_count);
+
+void setup() {
+    static InputState inputs;
+    
+    // Create array of input sources
+    static InputSource *input_sources[] = { &gpio_input };
+    size_t input_source_count = sizeof(input_sources) / sizeof(InputSource *);
+    
+    // Initialize backends with input sources
+    backend_count = initialize_backends(
+        backends, 
+        inputs, 
+        input_sources, 
+        input_source_count, 
+        config, 
+        pinout
+    );
+}
+```
+
+### Reading Button States Early
+
+You can read button states before backend initialization (e.g., to check for bootloader entry):
+
+```cpp config.cpp
+void setup() {
+    static InputState inputs;
+    static GpioButtonInput gpio_input(button_mappings, button_count);
+    
+    // Read buttons immediately
+    gpio_input.UpdateInputs(inputs);
+    
+    // Check for bootloader button hold
+    if (inputs.rt2) {
+        reboot_bootloader();
+    }
+    
+    // Continue with normal initialization...
+}
+```
+
+## Platform-Specific Notes
+
+### Raspberry Pi Pico
+
+- GPIO pins are numbered 0-28
+- All pins support internal pull-up resistors
+- Pin initialization is handled automatically by the constructor
+
+```cpp
+const GpioButtonMapping button_mappings[] = {
+    { BTN_LF1, 0 },   // GP0
+    { BTN_LF2, 1 },   // GP1
+    { BTN_RF1, 28 },  // GP28
+};
+```
+
+### Arduino (AVR)
+
+- Digital pins are numbered 0-13 (board-dependent)
+- Analog pins can be used as digital inputs: `A0-A5`
+- Pin constants like `A0`, `A1` are automatically defined
+
+```cpp
+const GpioButtonMapping button_mappings[] = {
+    { BTN_LF1, 2 },   // Digital pin 2
+    { BTN_RF1, A0 },  // Analog pin 0 (as digital input)
+    { BTN_RF2, A1 },  // Analog pin 1 (as digital input)
+};
+```
+
+<Note>
+  All GPIO pins are automatically configured with internal pull-up resistors. Buttons should be wired to connect the pin to ground (GND) when pressed.
+</Note>
+
+## Hardware Wiring
+
+Buttons should be wired with a simple pull-down configuration:
+
+```
+GPIO Pin ----[Button]---- GND
+            (Internal pull-up enabled)
+```
+
+- When the button is **not pressed**: Pin reads HIGH (1)
+- When the button is **pressed**: Pin reads LOW (0)
+
+<Warning>
+  Do not add external pull-up resistors. The internal pull-ups are enabled automatically and external resistors may cause interference.
+</Warning>
+
+## Button Identifiers
+
+HayBox supports 60 button identifiers organized by controller region:
+
+| Region | Identifiers | Description |
+|--------|-------------|-------------|
+| Left Face | `BTN_LF1` - `BTN_LF16` | Left face buttons (16 available) |
+| Right Face | `BTN_RF1` - `BTN_RF16` | Right face buttons (16 available) |
+| Left Thumb | `BTN_LT1` - `BTN_LT8` | Left thumb cluster buttons (8 available) |
+| Right Thumb | `BTN_RT1` - `BTN_RT8` | Right thumb cluster buttons (8 available) |
+| Middle | `BTN_MB1` - `BTN_MB12` | Middle/center buttons (12 available) |
+
+## Performance
+
+- **Scan Speed**: `FAST` - This input source is designed for rapid polling
+- **Typical Scan Rate**: 1000Hz+ depending on firmware loop speed
+- **Latency**: < 1ms for button state changes
+
+<Note>
+  GPIO button inputs are extremely fast and suitable for competitive gaming applications where low latency is critical.
+</Note>
+
+## See Also
+
+- [SwitchMatrixInput](/api/input/switch-matrix) - For matrix-wired button layouts
+- [DebouncedGpioButtonInput](/api/input/gpio-button) - GPIO input with hardware debouncing
+- [Button Reference](/hardware/pinouts#button-reference) - Complete button identifier reference
+- [Input Sources](/customization/input-sources) - Overview of all input source types

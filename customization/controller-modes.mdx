@@ -1,0 +1,385 @@
+---
+title: 'Creating Controller Modes'
+description: 'Learn how to create custom controller modes for HayBox firmware'
+icon: 'gamepad'
+---
+
+A `ControllerMode` transforms digital button inputs into gamepad outputs. Any ControllerMode works with any CommunicationBackend, making your modes portable across different platforms and backends.
+
+## Class Structure
+
+Controller modes inherit from the `ControllerMode` class and must implement two key functions:
+
+```cpp
+class CustomMode : public ControllerMode {
+  public:
+    CustomMode();
+  
+  protected:
+    void UpdateDigitalOutputs(const InputState &inputs, OutputState &outputs);
+    void UpdateAnalogOutputs(const InputState &inputs, OutputState &outputs);
+};
+```
+
+## Understanding Input and Output States
+
+### InputState
+
+The `InputState` struct contains all button inputs using a naming convention based on physical layout:
+
+- **lf1-lf16**: Left face buttons (1-16)
+- **rf1-rf16**: Right face buttons (1-16)
+- **lt1-lt8**: Left thumb buttons (typically modifiers)
+- **rt1-rt8**: Right thumb buttons (typically directional inputs)
+- **mb1-mb12**: Middle buttons (Start, Select, etc.)
+
+### OutputState
+
+The `OutputState` struct contains standard gamepad outputs:
+
+**Digital buttons:**
+- `a`, `b`, `x`, `y`
+- `buttonL`, `buttonR`
+- `triggerLDigital`, `triggerRDigital`
+- `start`, `select`, `home`, `capture`
+- `dpadUp`, `dpadDown`, `dpadLeft`, `dpadRight`
+
+**Analog outputs:**
+- `leftStickX`, `leftStickY` (0-255, neutral = 128)
+- `rightStickX`, `rightStickY` (0-255, neutral = 128)
+- `triggerLAnalog`, `triggerRAnalog` (0-255)
+
+## Implementing UpdateDigitalOutputs()
+
+This function maps digital inputs to digital outputs. It runs before analog outputs are processed.
+
+<Info>
+You don't need to reset the output state - this is done automatically at the start of each iteration.
+</Info>
+
+### Example from Melee20Button
+
+```cpp
+void Melee20Button::UpdateDigitalOutputs(const InputState &inputs, OutputState &outputs) {
+    outputs.a = inputs.rt1;
+    outputs.b = inputs.rf1;
+    outputs.x = inputs.rf2;
+    outputs.y = inputs.rf6;
+    outputs.buttonR = inputs.rf3;
+    outputs.triggerLDigital = inputs.lf4;
+    outputs.triggerRDigital = inputs.rf5;
+    outputs.start = inputs.mb1;
+
+    // Activate D-Pad layer by holding Mod X + Mod Y
+    if (inputs.lt1 && inputs.lt2) {
+        outputs.dpadUp = inputs.rt4;
+        outputs.dpadDown = inputs.rt2;
+        outputs.dpadLeft = inputs.rt3;
+        outputs.dpadRight = inputs.rt5;
+    }
+}
+```
+
+## Implementing UpdateAnalogOutputs()
+
+This function handles analog stick and trigger outputs. It must call `UpdateDirections()` first.
+
+### Step 1: Call UpdateDirections()
+
+The `UpdateDirections()` function automatically sets analog stick values based on directional inputs:
+
+```cpp
+void CustomMode::UpdateAnalogOutputs(const InputState &inputs, OutputState &outputs) {
+    // MUST be called first
+    UpdateDirections(
+        inputs.lf3,  // Left stick left
+        inputs.lf1,  // Left stick right
+        inputs.lf2,  // Left stick down
+        inputs.rf4,  // Left stick up
+        inputs.rt3,  // Right stick left (C-Left)
+        inputs.rt5,  // Right stick right (C-Right)
+        inputs.rt2,  // Right stick down (C-Down)
+        inputs.rt4,  // Right stick up (C-Up)
+        ANALOG_STICK_MIN,      // e.g., 48
+        ANALOG_STICK_NEUTRAL,  // e.g., 128
+        ANALOG_STICK_MAX,      // e.g., 208
+        outputs
+    );
+    
+    // Add modifier logic here...
+}
+```
+
+### Step 2: Use the directions Variable
+
+After calling `UpdateDirections()`, the `directions` member variable is populated:
+
+```cpp
+typedef struct {
+    bool horizontal;  // True if left or right is pressed (but not both)
+    bool vertical;    // True if up or down is pressed (but not both)
+    bool diagonal;    // True if both horizontal and vertical
+    int8_t x;         // -1 (left), 0 (neutral), or 1 (right)
+    int8_t y;         // -1 (down), 0 (neutral), or 1 (up)
+    int8_t cx;        // C-stick X direction
+    int8_t cy;        // C-stick Y direction
+} StickDirections;
+```
+
+This makes modifier logic much easier to write:
+
+```cpp
+// Example: Horizontal modifier when holding Mod X
+if (inputs.lt1 && directions.horizontal) {
+    outputs.leftStickX = 128 + (directions.x * 53);
+}
+
+// Example: Diagonal modifier
+if (inputs.lt1 && directions.diagonal) {
+    outputs.leftStickX = 128 + (directions.x * 51);
+    outputs.leftStickY = 128 + (directions.y * 30);
+}
+```
+
+### Step 3: Add Analog Trigger Values
+
+```cpp
+// Set analog trigger values based on digital trigger presses
+if (outputs.triggerLDigital) {
+    outputs.triggerLAnalog = 140;
+}
+if (outputs.triggerRDigital) {
+    outputs.triggerRAnalog = 140;
+}
+
+// Light shield with Mod buttons
+if (inputs.rf7) {
+    outputs.triggerRAnalog = 49;
+}
+```
+
+<Note>
+Analog trigger outputs could be handled in `UpdateDigitalOutputs()`, but it usually looks cleaner to keep them with other analog outputs.
+</Note>
+
+## Complete Example: Simple Controller Mode
+
+<Steps>
+
+<Step title="Create the header file">
+
+Create `include/modes/SimpleMode.hpp`:
+
+```cpp
+#ifndef _MODES_SIMPLEMODE_HPP
+#define _MODES_SIMPLEMODE_HPP
+
+#include "core/ControllerMode.hpp"
+#include "core/state.hpp"
+
+class SimpleMode : public ControllerMode {
+  public:
+    SimpleMode();
+
+  protected:
+    void UpdateDigitalOutputs(const InputState &inputs, OutputState &outputs);
+    void UpdateAnalogOutputs(const InputState &inputs, OutputState &outputs);
+};
+
+#endif
+```
+
+</Step>
+
+<Step title="Create the implementation file">
+
+Create `src/modes/SimpleMode.cpp`:
+
+```cpp
+#include "modes/SimpleMode.hpp"
+
+#define ANALOG_STICK_MIN 48
+#define ANALOG_STICK_NEUTRAL 128
+#define ANALOG_STICK_MAX 208
+
+SimpleMode::SimpleMode() : ControllerMode() {
+    // Configure SOCD pairs in constructor
+    _socd_pair_count = 2;
+    _socd_pairs = new socd::SocdPair[_socd_pair_count]{
+        socd::SocdPair{&InputState::lf3, &InputState::lf1, socd::SOCD_2IP_NO_REAC},
+        socd::SocdPair{&InputState::lf2, &InputState::rf4, socd::SOCD_2IP_NO_REAC},
+    };
+}
+
+void SimpleMode::UpdateDigitalOutputs(const InputState &inputs, OutputState &outputs) {
+    // Map face buttons
+    outputs.a = inputs.rt1;
+    outputs.b = inputs.rf1;
+    outputs.x = inputs.rf2;
+    outputs.y = inputs.rf6;
+    
+    // Map shoulder buttons
+    outputs.triggerLDigital = inputs.lf4;
+    outputs.triggerRDigital = inputs.rf5;
+    outputs.buttonR = inputs.rf3;
+    
+    // Map menu buttons
+    outputs.start = inputs.mb1;
+}
+
+void SimpleMode::UpdateAnalogOutputs(const InputState &inputs, OutputState &outputs) {
+    // Set default stick positions
+    UpdateDirections(
+        inputs.lf3,  // Left
+        inputs.lf1,  // Right
+        inputs.lf2,  // Down
+        inputs.rf4,  // Up
+        inputs.rt3,  // C-Left
+        inputs.rt5,  // C-Right
+        inputs.rt2,  // C-Down
+        inputs.rt4,  // C-Up
+        ANALOG_STICK_MIN,
+        ANALOG_STICK_NEUTRAL,
+        ANALOG_STICK_MAX,
+        outputs
+    );
+
+    // Add a simple modifier: Mod X reduces horizontal movement
+    if (inputs.lt1 && directions.horizontal) {
+        outputs.leftStickX = 128 + (directions.x * 40);
+    }
+
+    // Set analog trigger values
+    if (outputs.triggerLDigital) {
+        outputs.triggerLAnalog = 140;
+    }
+    if (outputs.triggerRDigital) {
+        outputs.triggerRAnalog = 140;
+    }
+}
+```
+
+</Step>
+
+<Step title="Configure SOCD in the constructor">
+
+SOCD (Simultaneous Opposite Cardinal Direction) cleaning is configured in the mode constructor:
+
+```cpp
+SimpleMode::SimpleMode() : ControllerMode() {
+    _socd_pair_count = 4;
+    _socd_pairs = new socd::SocdPair[_socd_pair_count]{
+        socd::SocdPair{&InputState::lf3,    &InputState::lf1,    socd::SOCD_2IP_NO_REAC},
+        socd::SocdPair{&InputState::lf2,    &InputState::rf4,    socd::SOCD_2IP_NO_REAC},
+        socd::SocdPair{&InputState::rt3,    &InputState::rt5,    socd::SOCD_2IP_NO_REAC},
+        socd::SocdPair{&InputState::rt2,    &InputState::rt4,    socd::SOCD_2IP_NO_REAC},
+    };
+}
+```
+
+**Available SOCD Types:**
+
+| SocdType | Description |
+|----------|-------------|
+| `SOCD_NEUTRAL` | Left + right = neutral (default) |
+| `SOCD_2IP` | Second input priority with reactivation |
+| `SOCD_2IP_NO_REAC` | Second input priority without reactivation |
+| `SOCD_DIR1_PRIORITY` | First direction always wins |
+| `SOCD_DIR2_PRIORITY` | Second direction always wins |
+| `SOCD_NONE` | No SOCD resolution |
+
+</Step>
+
+<Step title="Register your mode">
+
+Add your mode to `config/mode_selection.hpp`:
+
+```cpp
+#include "modes/SimpleMode.hpp"
+
+// In select_mode() function:
+if (inputs.mb1 && inputs.lt1 && inputs.rf1) {
+    return new SimpleMode();
+}
+```
+
+</Step>
+
+</Steps>
+
+## Advanced: Complex Modifier Logic
+
+The Melee20Button mode demonstrates advanced modifier handling:
+
+```cpp
+void Melee20Button::UpdateAnalogOutputs(const InputState &inputs, OutputState &outputs) {
+    UpdateDirections(
+        inputs.lf3, inputs.lf1, inputs.lf2, inputs.rf4,
+        inputs.rt3, inputs.rt5, inputs.rt2, inputs.rt4,
+        ANALOG_STICK_MIN, ANALOG_STICK_NEUTRAL, ANALOG_STICK_MAX,
+        outputs
+    );
+
+    bool shield_button_pressed = inputs.lf4 || inputs.rf5;
+    
+    // Diagonal angles
+    if (directions.diagonal) {
+        outputs.leftStickX = 128 + (directions.x * 56);
+        outputs.leftStickY = 128 + (directions.y * 56);
+    }
+
+    // Mod X modifiers
+    if (inputs.lt1) {
+        if (directions.horizontal) {
+            outputs.leftStickX = 128 + (directions.x * 53);
+        }
+        if (directions.vertical) {
+            outputs.leftStickY = 128 + (directions.y * 43);
+        }
+        
+        // Different diagonal angles when shield is held
+        if (directions.diagonal && shield_button_pressed) {
+            outputs.leftStickX = 128 + (directions.x * 51);
+            outputs.leftStickY = 128 + (directions.y * 30);
+        }
+        
+        // Up-B angles with additional C-stick modifiers
+        if (directions.diagonal && !shield_button_pressed) {
+            outputs.leftStickX = 128 + (directions.x * 59);
+            outputs.leftStickY = 128 + (directions.y * 25);
+            
+            // Further angle adjustments
+            if (inputs.rt2) {
+                outputs.leftStickX = 128 + (directions.x * 56);
+                outputs.leftStickY = 128 + (directions.y * 29);
+            }
+        }
+    }
+    
+    // Set analog triggers
+    if (outputs.triggerLDigital) {
+        outputs.triggerLAnalog = 140;
+    }
+    if (outputs.triggerRDigital) {
+        outputs.triggerRAnalog = 140;
+    }
+}
+```
+
+## Tips and Best Practices
+
+<Warning>
+Always call `UpdateDirections()` at the start of `UpdateAnalogOutputs()` before implementing any modifier logic.
+</Warning>
+
+- Use the `directions` variable to simplify modifier logic
+- When implementing modifiers, only set the axes that are actually being modified
+- Define analog stick ranges as constants for easy adjustment
+- SOCD cleaning happens automatically before both update functions run
+- Test your mode thoroughly with different input combinations
+- Look at existing modes (Melee20Button, FgcMode, Ultimate) for reference
+
+## See Also
+
+- [Keyboard Modes](/customization/keyboard-modes) - Creating keyboard input modes
+- [Input Sources](/customization/input-sources) - Understanding input sources

@@ -1,0 +1,126 @@
+---
+title: Button Holds
+description: Special button combinations held during plugin to access different modes and features
+icon: hand
+---
+
+HayBox uses specific button combinations held while plugging in the controller to access special modes and select communication backends. This page documents all available button hold combinations.
+
+## Button Hold Diagram
+
+<img width="1492" height="830" alt="Button hold diagram" src="https://github.com/user-attachments/assets/1725b3db-f5d6-4dd0-8883-70178bb9690f" />
+
+## Special Modes
+
+### Config Mode (Pico Only)
+
+<Info>
+This mode is only available on Pico/RP2040-based devices.
+</Info>
+
+To enter config mode, hold **MB1 (Start)** on plugin.
+
+Config mode allows you to modify controller settings without reflashing the firmware.
+
+### Pico Bootsel Mode
+
+<Note>
+This is a quick way to reflash firmware on Pico-based controllers without physically pressing the bootsel button.
+</Note>
+
+To reboot Pico-based controllers into bootsel mode, hold **RT2 (C-Down)** on plugin.
+
+This is checked very early during boot for safety reasons. Once in bootsel mode, you can drag and drop a new `.uf2` firmware file to update your controller.
+
+### Brook Board Passthrough Mode
+
+<Info>
+Available on GCCPCB2, GCCMX, B0XX R2, and LBX configurations.
+</Info>
+
+To switch to Brook board mode, hold **RF1 (B)** on plugin.
+
+This mode allows you to use an integrated Brook board for communication instead of the HayBox firmware.
+
+## Communication Backend Selection
+
+<Tabs>
+  <Tab title="Pico/RP2040">
+    On Pico/RP2040 devices, HayBox automatically detects whether you're plugged into:
+    - **USB** - Defaults to XInput mode
+    - **GameCube console** - Automatically detected
+    - **Nintendo 64 console** - Automatically detected
+
+    ### Manual Backend Selection
+
+    You can override the default USB backend by holding these buttons on plugin:
+
+    | Button | Backend | Description |
+    |--------|---------|-------------|
+    | **RF2 (X)** | Nintendo Switch USB | Also sets initial game mode to Ultimate |
+    | **RF3 (Z)** | DInput | Only recommended for games that don't support XInput |
+
+    <Note>
+    XInput is the default and recommended backend for most PC games as it provides the best compatibility.
+    </Note>
+  </Tab>
+  
+  <Tab title="Arduino/AVR">
+    On Arduino/AVR devices, backend selection works differently:
+
+    - **USB connection detected** → DInput backend
+    - **No USB connection** → GameCube backend (default)
+
+    ### Manual Backend Selection
+
+    You can manually select specific backends by holding these buttons on plugin:
+
+    | Button | Backend | Description |
+    |--------|---------|-------------|
+    | **RT1 (A)** | GameCube (no polling fix) | For use with GCC adapters |
+    | **RT3 (C-Left)** | Nintendo 64 | 60Hz polling rate |
+
+    <Warning>
+    If using an official GameCube adapter with Arduino, you will likely need to hold A on plugin to disable the polling latency optimization.
+    </Warning>
+  </Tab>
+</Tabs>
+
+## Polling Rate Configuration
+
+### Arduino/AVR Polling Rate
+
+On Arduino devices, you can configure the polling rate in your config file. The polling rate value is passed to the backend constructor:
+
+```cpp
+GamecubeBackend *gamecube_backend = new GamecubeBackend(inputs, input_sources, input_source_count, pinout.joybus_data, 125);
+```
+
+Common polling rates:
+- `125` - Standard GameCube console (125Hz)
+- `1000` - Overclocked adapter (1000Hz)
+- `0` - Disable lag fix completely
+
+<Note>
+While 1000Hz works on console, it will result in more input lag. The polling rate setting allows the GameCube backend to read inputs right before the next poll for optimal freshness.
+</Note>
+
+### Pico/RP2040 Polling Rate
+
+<Info>
+Pico/RP2040 devices do not require polling rate configuration.
+</Info>
+
+The Pico has enough processing power to read and process inputs after receiving the console poll, eliminating the need to predict when polls will arrive.
+
+## Button Naming Reference
+
+HayBox uses a consistent button naming scheme:
+
+- **LF** = Left Face (L, Left, Down, Right)
+- **LT** = Left Top (Mod X, Mod Y)
+- **MB** = Middle Buttons (Start, Select, Home)
+- **RT** = Right Top (A, C-Down, C-Left, C-Up, C-Right)
+- **RF** = Right Face (B, X, Z, Up, R, etc.)
+
+The exact mapping depends on your controller configuration. See your `config/<environment>/config.cpp` file for the specific pin mappings.

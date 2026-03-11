@@ -1,0 +1,343 @@
+---
+title: "KeyboardMode"
+description: "Base class for implementing keyboard input modes in HayBox firmware"
+---
+
+## Overview
+
+`KeyboardMode` is an abstract base class that extends `InputMode` to provide keyboard-specific functionality. It handles the conversion of physical button inputs into keyboard key presses using USB HID keyboard reports.
+
+<Note>
+  KeyboardMode is hardware-specific and is only available on platforms that support USB keyboard functionality (e.g., Raspberry Pi Pico). The header file location varies by HAL (Hardware Abstraction Layer).
+</Note>
+
+## Class Definition
+
+```cpp
+class KeyboardMode : public InputMode {
+  public:
+    KeyboardMode();
+    ~KeyboardMode();
+    void SendReport(const InputState &inputs);
+    void UpdateOutputs(const InputState &inputs, OutputState &outputs) {}
+
+  protected:
+    void Press(uint8_t keycode, bool press);
+
+  private:
+    TUKeyboard *_keyboard;
+    virtual void UpdateKeys(const InputState &inputs) = 0;
+};
+```
+
+## Inheritance
+
+<ResponseField name="Base Class" type="InputMode">
+  Inherits from `InputMode`, which provides configuration management, SOCD handling, and button remapping functionality.
+</ResponseField>
+
+## Constructor & Destructor
+
+### KeyboardMode()
+
+```cpp
+KeyboardMode::KeyboardMode() : InputMode()
+```
+
+Initializes a new keyboard mode instance and sets up the USB keyboard interface.
+
+**Implementation Details:**
+- Calls the parent `InputMode` constructor
+- Creates a new `TUKeyboard` instance
+- Calls `_keyboard->begin()` to initialize USB keyboard functionality
+
+### ~KeyboardMode()
+
+```cpp
+KeyboardMode::~KeyboardMode()
+```
+
+Cleans up the keyboard mode instance.
+
+**Behavior:**
+- Releases all pressed keys via `_keyboard->releaseAll()`
+- Sends a final keyboard report to clear all keys
+- Deletes the `TUKeyboard` instance
+
+<Warning>
+  The destructor ensures all keys are released before cleanup. This prevents stuck keys if the mode is switched during operation.
+</Warning>
+
+## Public Methods
+
+### SendReport
+
+```cpp
+void SendReport(const InputState &inputs)
+```
+
+Processes input state and sends a USB keyboard HID report to the host device.
+
+<ParamField path="inputs" type="const InputState&">
+  Reference to the current input state containing all physical button presses
+</ParamField>
+
+**Processing Order:**
+1. Creates a copy of inputs for remapping
+2. Applies button remapping via `HandleRemap()`
+3. Applies SOCD (Simultaneous Opposite Cardinal Direction) resolution via `HandleSocd()`
+4. Calls `UpdateKeys()` to set key press states
+5. Sends the keyboard report via `_keyboard->sendState()`
+
+**Usage:**
+This method should be called from the main loop when in keyboard mode, typically via the communication backend.
+
+```cpp
+if (KeyboardMode *kb_mode = dynamic_cast<KeyboardMode *>(backend.CurrentGameMode())) {
+    kb_mode->SendReport(backend.GetInputs());
+}
+```
+
+### UpdateOutputs
+
+```cpp
+void UpdateOutputs(const InputState &inputs, OutputState &outputs) {}
+```
+
+Empty implementation required by the `InputMode` interface. KeyboardMode uses `SendReport()` instead of the standard output state mechanism.
+
+<Note>
+  This method is a no-op for KeyboardMode because keyboard outputs are sent directly via USB HID reports rather than through the OutputState structure.
+</Note>
+
+## Protected Methods
+
+### Press
+
+```cpp
+void Press(uint8_t keycode, bool press)
+```
+
+Sets the press state of a specific keyboard key.
+
+<ParamField path="keycode" type="uint8_t">
+  USB HID keyboard keycode (e.g., `HID_KEY_A`, `HID_KEY_SHIFT_LEFT`)
+</ParamField>
+
+<ParamField path="press" type="bool">
+  `true` to press the key, `false` to release it
+</ParamField>
+
+**Implementation:**
+Calls `_keyboard->setPressed(keycode, press)` to update the internal keyboard state. The actual USB report is sent when `SendReport()` is called.
+
+**Example:**
+```cpp
+Press(HID_KEY_A, inputs.lf1);  // Press 'A' if lf1 is pressed
+Press(HID_KEY_SPACE, inputs.rf1);  // Press Space if rf1 is pressed
+```
+
+## Pure Virtual Methods
+
+### UpdateKeys
+
+```cpp
+virtual void UpdateKeys(const InputState &inputs) = 0
+```
+
+Implement this method to map physical button inputs to keyboard key presses.
+
+<ParamField path="inputs" type="const InputState&">
+  Remapped and SOCD-resolved input state
+</ParamField>
+
+**Implementation Requirements:**
+- Call `Press()` for each button-to-key mapping
+- The input state passed to this method has already been processed through remapping and SOCD
+
+## USB HID Keycodes
+
+Keyboard modes use standard USB HID keycodes. Common keycodes include:
+
+<ResponseField name="Letter Keys" type="uint8_t">
+  `HID_KEY_A` through `HID_KEY_Z` (0x04-0x1D)
+</ResponseField>
+
+<ResponseField name="Number Keys" type="uint8_t">
+  `HID_KEY_1` through `HID_KEY_0` (0x1E-0x27)
+</ResponseField>
+
+<ResponseField name="Modifier Keys" type="uint8_t">
+  - `HID_KEY_SHIFT_LEFT` (0xE1)
+  - `HID_KEY_CONTROL_LEFT` (0xE0)
+  - `HID_KEY_ALT_LEFT` (0xE2)
+  - `HID_KEY_GUI_LEFT` (0xE3) - Windows/Command key
+</ResponseField>
+
+<ResponseField name="Special Keys" type="uint8_t">
+  - `HID_KEY_ENTER` (0x28)
+  - `HID_KEY_ESCAPE` (0x29)
+  - `HID_KEY_BACKSPACE` (0x2A)
+  - `HID_KEY_TAB` (0x2B)
+  - `HID_KEY_SPACE` (0x2C)
+</ResponseField>
+
+<ResponseField name="Arrow Keys" type="uint8_t">
+  - `HID_KEY_ARROW_RIGHT` (0x4F)
+  - `HID_KEY_ARROW_LEFT` (0x50)
+  - `HID_KEY_ARROW_DOWN` (0x51)
+  - `HID_KEY_ARROW_UP` (0x52)
+</ResponseField>
+
+For a complete list of HID keycodes, refer to the [USB HID Usage Tables specification](https://www.usb.org/sites/default/files/documents/hut1_12v2.pdf).
+
+## Usage Example
+
+Here's how the `DefaultKeyboardMode` implements `KeyboardMode`:
+
+```cpp
+class DefaultKeyboardMode : public KeyboardMode {
+  public:
+    DefaultKeyboardMode();
+
+  private:
+    void UpdateKeys(const InputState &inputs);
+};
+```
+
+### Implementation
+
+```cpp
+DefaultKeyboardMode::DefaultKeyboardMode() : KeyboardMode() {}
+
+void DefaultKeyboardMode::UpdateKeys(const InputState &inputs) {
+    Press(HID_KEY_A, inputs.lf4);
+    Press(HID_KEY_B, inputs.lf3);
+    Press(HID_KEY_C, inputs.lf2);
+    Press(HID_KEY_D, inputs.lf1);
+    Press(HID_KEY_E, inputs.lt1);
+    Press(HID_KEY_F, inputs.lt2);
+    Press(HID_KEY_G, inputs.mb3);
+    Press(HID_KEY_H, inputs.mb1);
+    Press(HID_KEY_I, inputs.mb2);
+    Press(HID_KEY_J, inputs.rf5);
+    Press(HID_KEY_K, inputs.rf6);
+    Press(HID_KEY_L, inputs.rf7);
+    Press(HID_KEY_M, inputs.rf8);
+    Press(HID_KEY_N, inputs.rf1);
+    Press(HID_KEY_O, inputs.rf2);
+    Press(HID_KEY_P, inputs.rf3);
+    Press(HID_KEY_Q, inputs.rf4);
+    Press(HID_KEY_R, inputs.rt4);
+    Press(HID_KEY_S, inputs.rt3);
+    Press(HID_KEY_T, inputs.rt5);
+    Press(HID_KEY_U, inputs.rt1);
+    Press(HID_KEY_V, inputs.rt2);
+}
+```
+
+### Creating a Custom Keyboard Mode
+
+Here's an example of a custom keyboard mode for a specific game:
+
+```cpp
+class FPSKeyboardMode : public KeyboardMode {
+  public:
+    FPSKeyboardMode() : KeyboardMode() {}
+
+  private:
+    void UpdateKeys(const InputState &inputs) {
+        // WASD movement
+        Press(HID_KEY_W, inputs.rf4);        // Up
+        Press(HID_KEY_A, inputs.lf3);        // Left
+        Press(HID_KEY_S, inputs.lf2);        // Down
+        Press(HID_KEY_D, inputs.lf1);        // Right
+
+        // Actions
+        Press(HID_KEY_SPACE, inputs.rt1);    // Jump
+        Press(HID_KEY_SHIFT_LEFT, inputs.lf4); // Sprint
+        Press(HID_KEY_CONTROL_LEFT, inputs.lt1); // Crouch
+        Press(HID_KEY_R, inputs.rf1);        // Reload
+        Press(HID_KEY_E, inputs.rf2);        // Use/Interact
+
+        // Weapons
+        Press(HID_KEY_1, inputs.rt2);
+        Press(HID_KEY_2, inputs.rt3);
+        Press(HID_KEY_3, inputs.rt4);
+        Press(HID_KEY_4, inputs.rt5);
+
+        // UI
+        Press(HID_KEY_TAB, inputs.mb1);      // Scoreboard
+        Press(HID_KEY_ESCAPE, inputs.mb2);   // Menu
+    }
+};
+```
+
+## Integration with Communication Backend
+
+KeyboardMode works differently from ControllerMode in the main loop:
+
+```cpp
+void loop() {
+    backend.ScanInputs();
+
+    if (KeyboardMode *kb_mode = dynamic_cast<KeyboardMode *>(backend.CurrentGameMode())) {
+        // Keyboard mode: send keyboard report directly
+        kb_mode->SendReport(backend.GetInputs());
+    } else {
+        // Controller mode: update outputs and send controller report
+        backend.UpdateOutputs();
+        backend.SendReport();
+    }
+}
+```
+
+<Note>
+  Use a dynamic cast to check if the current mode is a KeyboardMode. This allows you to handle keyboard and controller modes differently in your main loop.
+</Note>
+
+## Platform Support
+
+<ResponseField name="Raspberry Pi Pico" type="Supported">
+  Full keyboard support via TinyUSB library
+  
+  Header: `HAL/pico/include/core/KeyboardMode.hpp`
+</ResponseField>
+
+<ResponseField name="AVR with USB" type="Supported">
+  Full keyboard support via LUFA library
+  
+  Header: `HAL/avr/avr_usb/include/core/KeyboardMode.hpp`
+</ResponseField>
+
+<ResponseField name="AVR without USB" type="Not Supported">
+  KeyboardMode is not available on AVR platforms without USB support
+</ResponseField>
+
+## Best Practices
+
+<Warning>
+  Always ensure the destructor is called properly when switching away from keyboard mode. Failure to release keys can result in stuck keys on the host system.
+</Warning>
+
+<Note>
+  SOCD resolution and button remapping are automatically applied before `UpdateKeys()` is called, so you don't need to handle these in your implementation.
+</Note>
+
+## Limitations
+
+- Maximum of 6 simultaneous non-modifier keys (USB HID keyboard limitation)
+- Modifier keys (Shift, Ctrl, Alt, GUI) are tracked separately and don't count toward the 6-key limit
+- Media keys and other special functions require specific HID descriptors in the TUKeyboard implementation
+
+## Related Types
+
+- **InputState**: Defined in `include/core/state.hpp` - contains all button states
+- **InputMode**: Parent class providing config, SOCD, and remapping functionality
+- **TUKeyboard**: TinyUSB keyboard implementation (hardware-specific)
+
+## See Also
+
+- [ControllerMode](/api/controller-mode) - For implementing game controller modes
+- [InputSource](/api/input-source) - For reading physical inputs
+- [CommunicationBackend](/api/communication-backend) - For managing input/output operations

@@ -1,0 +1,391 @@
+---
+title: 'NunchukInput'
+description: 'Input source for reading Wii Nunchuk controller data via I2C communication'
+---
+
+## Overview
+
+`NunchukInput` enables reading analog stick and button data from a Nintendo Wii Nunchuk controller connected via I2C. This provides a low-cost analog input option with two buttons (C and Z) and a 2-axis analog stick.
+
+<Note>
+  The Nunchuk input source is platform-specific. Implementation differs between Raspberry Pi Pico and Arduino (AVR) platforms.
+</Note>
+
+## Class Declaration
+
+### Raspberry Pi Pico
+
+```cpp
+class NunchukInput : public InputSource {
+  public:
+    NunchukInput(
+        TwoWire &wire = Wire,
+        int detect_pin = -1,
+        int sda_pin = 4,
+        int scl_pin = 5
+    );
+    ~NunchukInput();
+    InputScanSpeed ScanSpeed();
+    void UpdateInputs(InputState &inputs);
+};
+```
+
+### Arduino (AVR)
+
+```cpp
+class NunchukInput : public InputSource {
+  public:
+    NunchukInput(int detect_pin = -1);
+    ~NunchukInput();
+    InputScanSpeed ScanSpeed();
+    void UpdateInputs(InputState &inputs);
+};
+```
+
+## Constructor
+
+### Raspberry Pi Pico
+
+```cpp
+NunchukInput(
+    TwoWire &wire = Wire,
+    int detect_pin = -1,
+    int sda_pin = 4,
+    int scl_pin = 5
+)
+```
+
+<ParamField path="wire" type="TwoWire&" default="Wire">
+  Reference to the I2C (Wire) interface to use for communication. Defaults to the primary `Wire` instance.
+</ParamField>
+
+<ParamField path="detect_pin" type="int" default="-1">
+  Optional GPIO pin for Nunchuk detection. When set to a valid pin number, the pin is read with pull-up enabled. If HIGH, Nunchuk initialization is skipped. Set to `-1` to disable detection.
+</ParamField>
+
+<ParamField path="sda_pin" type="int" default="4">
+  GPIO pin number for I2C SDA (data) line. Must be a valid I2C-capable pin on your board.
+</ParamField>
+
+<ParamField path="scl_pin" type="int" default="5">
+  GPIO pin number for I2C SCL (clock) line. Must be a valid I2C-capable pin on your board.
+</ParamField>
+
+### Arduino (AVR)
+
+```cpp
+NunchukInput(int detect_pin = -1)
+```
+
+<ParamField path="detect_pin" type="int" default="-1">
+  Optional GPIO pin for Nunchuk detection. When set to a valid pin number, the pin is read with pull-up enabled. If HIGH, Nunchuk initialization is skipped. Set to `-1` to disable detection.
+</ParamField>
+
+<Note>
+  On Arduino (AVR), I2C pins are fixed by hardware (typically A4/SDA and A5/SCL on Arduino Uno). The Wire library is automatically initialized with these pins.
+</Note>
+
+## Methods
+
+### ScanSpeed()
+
+Returns `InputScanSpeed::SLOW`, indicating this input source should be polled less frequently than GPIO inputs.
+
+```cpp
+InputScanSpeed ScanSpeed();
+```
+
+<ResponseField name="return" type="InputScanSpeed">
+  Always returns `InputScanSpeed::SLOW`
+</ResponseField>
+
+<Note>
+  Nunchuk communication over I2C is slower than GPIO reads. The SLOW scan speed prevents unnecessary I2C traffic and reduces latency impact on other inputs.
+</Note>
+
+### UpdateInputs()
+
+Reads the latest data from the Nunchuk and updates the input state.
+
+```cpp
+void UpdateInputs(InputState &inputs);
+```
+
+<ParamField path="inputs" type="InputState&" required>
+  Reference to the `InputState` structure to update with Nunchuk data.
+</ParamField>
+
+#### Input State Fields Updated
+
+When a Nunchuk is connected and responding:
+
+```cpp
+inputs.nunchuk_connected = true;  // Nunchuk is present and responding
+inputs.nunchuk_x = <value>;       // Stick X position (-128 to 127)
+inputs.nunchuk_y = <value>;       // Stick Y position (-128 to 127)
+inputs.nunchuk_c = <pressed>;     // C button state (true = pressed)
+inputs.nunchuk_z = <pressed>;     // Z button state (true = pressed)
+```
+
+If no Nunchuk is connected or it fails to respond, these fields remain at their default values (all zeros/false).
+
+## Configuration Example
+
+### Raspberry Pi Pico Configuration
+
+```cpp config.cpp
+#include "input/NunchukInput.hpp"
+#include "core/state.hpp"
+#include <Wire.h>
+
+const Pinout pinout = {
+    .joybus_data = 22,
+    .mux = -1,
+    .nunchuk_detect = 21,  // Optional detection pin
+    .nunchuk_sda = 4,      // I2C data pin
+    .nunchuk_scl = 5,      // I2C clock pin
+};
+
+// Create Nunchuk input with custom pins
+static NunchukInput nunchuk_input(
+    Wire,
+    pinout.nunchuk_detect,
+    pinout.nunchuk_sda,
+    pinout.nunchuk_scl
+);
+
+void setup() {
+    static InputState inputs;
+    
+    // Create input sources array
+    static InputSource *input_sources[] = { &nunchuk_input };
+    size_t input_source_count = sizeof(input_sources) / sizeof(InputSource *);
+    
+    // Initialize backends with Nunchuk input
+    backend_count = initialize_backends(
+        backends,
+        inputs,
+        input_sources,
+        input_source_count,
+        config,
+        pinout
+    );
+}
+```
+
+### Arduino (AVR) Configuration
+
+```cpp config.cpp
+#include "input/NunchukInput.hpp"
+#include "core/state.hpp"
+
+const Pinout pinout = {
+    .joybus_data = 8,
+    .nunchuk_detect = 2,  // Optional detection pin
+    .nunchuk_sda = A4,    // Fixed by hardware on Arduino Uno
+    .nunchuk_scl = A5,    // Fixed by hardware on Arduino Uno
+};
+
+// Create Nunchuk input with optional detection
+static NunchukInput nunchuk_input(pinout.nunchuk_detect);
+
+void setup() {
+    static InputState inputs;
+    
+    static InputSource *input_sources[] = { &nunchuk_input };
+    size_t input_source_count = sizeof(input_sources) / sizeof(InputSource *);
+    
+    backend_count = initialize_backends(
+        backends,
+        inputs,
+        input_sources,
+        input_source_count,
+        config,
+        pinout
+    );
+}
+```
+
+### Combining with GPIO Buttons
+
+```cpp config.cpp
+#include "input/GpioButtonInput.hpp"
+#include "input/NunchukInput.hpp"
+
+const GpioButtonMapping button_mappings[] = {
+    { BTN_LF1, 0 },
+    { BTN_RF1, 1 },
+    // ... more buttons
+};
+const size_t button_count = sizeof(button_mappings) / sizeof(GpioButtonMapping);
+
+static GpioButtonInput gpio_input(button_mappings, button_count);
+static NunchukInput nunchuk_input(Wire, -1, 4, 5);
+
+void setup() {
+    static InputState inputs;
+    
+    // Combine both input sources
+    static InputSource *input_sources[] = {
+        &gpio_input,
+        &nunchuk_input
+    };
+    size_t input_source_count = sizeof(input_sources) / sizeof(InputSource *);
+    
+    backend_count = initialize_backends(
+        backends,
+        inputs,
+        input_sources,
+        input_source_count,
+        config,
+        pinout
+    );
+}
+```
+
+## Hardware Connection
+
+### Pinout
+
+Nunchuk controllers use a 4-wire connection:
+
+| Wire Color | Signal | Description |
+|------------|--------|-------------|
+| White | SDA | I2C data line |
+| Green | SCL | I2C clock line |
+| Red | VCC | 3.3V power supply |
+| Yellow | GND | Ground |
+
+<Warning>
+  Nunchuk controllers require **3.3V power**. Do not connect to 5V as this may damage the controller. Most Raspberry Pi Pico and Arduino boards provide 3.3V power pins.
+</Warning>
+
+### Wiring Diagram
+
+```
+Nunchuk          Raspberry Pi Pico
+-------          -----------------
+White (SDA) ---> GP4 (or configured SDA pin)
+Green (SCL) ---> GP5 (or configured SCL pin)
+Red (VCC)   ---> 3.3V
+Yellow (GND) --> GND
+```
+
+### Optional Detection Circuit
+
+The detection pin allows the firmware to detect if a Nunchuk is physically connected:
+
+```
+Detection Pin ----[10kΩ pull-up]---- 3.3V
+                        |
+                     [Switch to GND when Nunchuk present]
+```
+
+When the detection pin reads HIGH, Nunchuk initialization is skipped, preventing I2C interference with other devices on the same pins.
+
+## Nunchuk Data Mapping
+
+### Analog Stick Values
+
+The Nunchuk analog stick provides 8-bit values:
+
+- **X Axis**: `-128` (full left) to `+127` (full right)
+- **Y Axis**: `-128` (full down) to `+127` (full up)
+- **Center**: Approximately `0` for both axes (calibration may vary)
+
+### Button States
+
+- **C Button**: `inputs.nunchuk_c` - Larger button on the face
+- **Z Button**: `inputs.nunchuk_z` - Trigger button on the back
+
+Buttons are `true` when pressed, `false` when released.
+
+## Initialization and Detection
+
+The constructor automatically:
+
+1. Checks the detection pin (if configured)
+2. Configures I2C pins (Pico only)
+3. Initializes the Nunchuk controller
+4. Verifies communication with the Nunchuk
+
+### Initialization Failure Handling
+
+If Nunchuk initialization fails:
+
+- I2C communication is ended (to prevent pin interference)
+- The internal Nunchuk object is deleted
+- All subsequent `UpdateInputs()` calls do nothing
+- `nunchuk_connected` remains `false`
+
+<Note>
+  Failed initialization is normal when no Nunchuk is connected. The firmware continues operating normally with other input sources.
+</Note>
+
+## Platform-Specific Details
+
+### Raspberry Pi Pico (RP2040)
+
+- **Flexible I2C Pins**: Can use any GPIO pins with I2C function
+- **Wire Library**: Supports multiple I2C buses (`Wire`, `Wire1`)
+- **Recommended Pins**:
+  - I2C0: GP4 (SDA), GP5 (SCL)
+  - I2C1: GP6 (SDA), GP7 (SCL)
+
+### Arduino (AVR)
+
+- **Fixed I2C Pins**: Hardware-defined (typically A4=SDA, A5=SCL)
+- **Wire Library**: Single I2C bus only
+- **Voltage**: Ensure 3.3V power is available (may require level shifter on 5V Arduinos)
+
+## Performance
+
+- **Scan Speed**: `SLOW` - optimized for I2C communication timing
+- **Update Rate**: 100-200Hz typical (limited by I2C speed)
+- **Latency**: 5-10ms for state changes
+- **I2C Clock**: 100kHz (standard mode) or 400kHz (fast mode)
+
+<Note>
+  Nunchuk input is slower than GPIO buttons but provides analog input capabilities. Use in combination with fast GPIO inputs for optimal responsiveness.
+</Note>
+
+## Troubleshooting
+
+### Nunchuk Not Detected
+
+**Symptoms**: `nunchuk_connected` always `false`
+
+**Solutions**:
+- Verify 3.3V power connection
+- Check SDA/SCL pin numbers match physical wiring
+- Test with a known-good Nunchuk controller
+- Verify I2C pins aren't used for other purposes
+
+### Erratic Readings
+
+**Symptoms**: Unstable stick values or button states
+
+**Solutions**:
+- Add pull-up resistors (4.7kΩ) on SDA and SCL lines
+- Shorten wire length between controller and microcontroller
+- Check for electrical interference from nearby wires
+
+### Third-Party Controllers
+
+**Symptoms**: Some clone controllers don't work
+
+**Solutions**:
+- Authentic Nintendo Nunchuk controllers are most reliable
+- Some clones use different I2C protocols (not supported)
+- Test with authentic hardware if issues persist
+
+<Warning>
+  Clone/third-party Nunchuk controllers may have compatibility issues. For best results, use authentic Nintendo hardware.
+</Warning>
+
+## See Also
+
+- [GamecubeControllerInput](/api/input/gamecube-controller) - Alternative analog input source
+- [GpioButtonInput](/api/input/gpio-button) - For digital button inputs
+- [Input Sources](/customization/input-sources) - Overview of all input source types
+- [Pinout Configuration](/hardware/pinouts) - Configuring hardware pins

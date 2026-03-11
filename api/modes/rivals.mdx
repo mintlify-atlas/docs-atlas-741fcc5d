@@ -1,0 +1,281 @@
+---
+title: 'RivalsOfAether'
+description: 'Rivals of Aether mode with optimized DI angles and Up-B precision'
+---
+
+## Overview
+
+The `RivalsOfAether` mode is designed for the original Rivals of Aether with coordinates optimized for the game's movement and recovery system. It features 48 DI angles, 24 Up-B angles, and 16 airdodge angles for maximum precision.
+
+## Constructor
+
+```cpp
+RivalsOfAether()
+```
+
+Creates a new RivalsOfAether mode instance with default settings.
+
+<ParamField path="return" type="RivalsOfAether">
+  A new mode instance ready for use
+</ParamField>
+
+## Button Layout
+
+### Digital Outputs
+
+<Card title="Action Buttons" icon="gamepad">
+  - **A**: RT1 (Strong/Special)
+  - **B**: RF1 (Attack)
+  - **X**: RF2 (Jump)
+  - **Y**: RF6 (Jump)
+  - **R (Parry)**: RF3
+  - **L (Shield)**: LF4 (or Nunchuk Z when connected)
+  - **ZR**: RF5
+  - **Start (+)**: MB1
+  - **Select (-)**: MB3
+  - **Home**: MB2
+  - **LS Click**: RF7
+  - **RS Click**: RF8
+</Card>
+
+### Directional Inputs
+
+<Card title="Movement" icon="arrows-up-down-left-right">
+  - **Left**: LF3
+  - **Right**: LF1
+  - **Down**: LF2
+  - **Up**: RF4
+</Card>
+
+<Card title="C-Stick" icon="circle-dot">
+  - **C-Left**: RT3
+  - **C-Right**: RT5
+  - **C-Down**: RT2
+  - **C-Up**: RT4
+</Card>
+
+### Modifiers
+
+<Card title="Modifier Buttons" icon="sliders">
+  - **Mod X**: LT1
+  - **Mod Y**: LT2
+</Card>
+
+### D-Pad Layer
+
+Activate by holding **Mod X + Mod Y**:
+- **D-Up**: RT4
+- **D-Down**: RT2
+- **D-Left**: RT3
+- **D-Right**: RT5
+
+<Warning>
+When the D-Pad layer is active, C-stick inputs are disabled.
+</Warning>
+
+## Analog Stick Range
+
+<Card title="Extended Range" icon="ruler">
+  RivalsOfAether uses wide analog ranges:
+  
+  - **Minimum**: 28
+  - **Neutral**: 128
+  - **Maximum**: 228
+  
+  This provides 100 units of travel in each direction for maximum precision.
+</Card>
+
+## Modifier Coordinates
+
+### Mod X (LT1)
+
+<Tabs>
+  <Tab title="Cardinal Directions">
+    | Input | Coordinates | Offset | Usage |
+    |-------|-------------|--------|-------|
+    | MX + Left/Right | 128 ± 66 | 66 | Horizontal |
+    | MX + Left/Right + A | 128 ± 44 | 44 | Horizontal tilts |
+    | MX + Up/Down | 128 ± 44 | 44 | Vertical |
+    | MX + Up/Down + A | 128 ± 67 | 67 | Vertical tilts |
+  </Tab>
+  
+  <Tab title="DI/Airdodge/Up-B Angles">
+    Extra angles for DI, Airdodge, and Up-B:
+    
+    | Additional Input | Coordinates | Usage |
+    |-----------------|-------------|-------|
+    | Default | (59, 23) | Base angle |
+    | + C-Down | (49, 24) | DI & Up-B |
+    | + C-Left | (52, 31) | DI only |
+    | + C-Up | (49, 35) | DI only |
+    | + C-Right | (51, 43) | DI only |
+  </Tab>
+</Tabs>
+
+<Note>
+Mod X provides precise shallow angles ideal for horizontal recovery and DI.
+</Note>
+
+### Mod Y (LT2)
+
+<Tabs>
+  <Tab title="Cardinal Directions">
+    | Input | Coordinates | Offset | Usage |
+    |-------|-------------|--------|-------|
+    | MY + Left/Right | 128 ± 44 | 44 | Horizontal |
+    | MY + Up/Down | 128 ± 67 | 67 | Vertical |
+  </Tab>
+  
+  <Tab title="DI/Airdodge/Up-B Angles">
+    Extra angles for DI, Airdodge, and Up-B:
+    
+    | Additional Input | Coordinates | Usage |
+    |-----------------|-------------|-------|
+    | Default | (44, 113) | Base steep angle |
+    | + C-Down | (44, 90) | DI & Up-B |
+    | + C-Left | (44, 74) | DI only |
+    | + C-Up | (45, 63) | DI only |
+    | + C-Right | (47, 57) | DI only |
+  </Tab>
+</Tabs>
+
+<Note>
+Mod Y provides steep angles ideal for vertical recovery and high DI angles.
+</Note>
+
+### Default Coordinates
+
+<Card title="No Modifiers" icon="circle">
+  | Input | Coordinates | Offset | Usage |
+  |-------|-------------|--------|-------|
+  | Cardinal | 128 ± 100 | 100 | Full range |
+  | Diagonal | (100, 100) | 100 | All quadrants |
+</Card>
+
+## Angle Coverage
+
+<Card title="48 DI Angles, 24 Up-B Angles, 16 Airdodge Angles" icon="circle-nodes">
+  RivalsOfAether mode provides extensive angle coverage:
+  
+  - **DI Angles**: 48 total angles for optimal directional influence
+  - **Up-B Angles**: 24 recovery angles for precise movement
+  - **Airdodge Angles**: 16 angles for directional airdodges
+  
+  This is achieved through combinations of:
+  - No modifier (8 directions)
+  - Mod X + directions (multiple angles)
+  - Mod Y + directions (multiple angles)
+  - C-stick modifiers (5 additional angles per modifier)
+</Card>
+
+## SOCD Configuration
+
+<Warning>
+RivalsOfAether requires **2IP No Reactivation** for all directional pairs:
+- Left/Right (LF3/LF1) - SOCD_2IP_NO_REAC
+- Down/Up (LF2/RF4) - SOCD_2IP_NO_REAC
+- C-Left/C-Right (RT3/RT5) - SOCD_2IP_NO_REAC
+- C-Down/C-Up (RT2/RT4) - SOCD_2IP_NO_REAC
+</Warning>
+
+## Special Features
+
+### Tilt Attack Support
+
+When holding **A (RT1)** with modifiers:
+
+<Card title="Tilt Inputs" icon="hand-pointer">
+  | Modifier | Direction | Result |
+  |----------|-----------|--------|
+  | MX | Left/Right | Horizontal tilt (44 offset) |
+  | MX | Up/Down | Vertical tilt (67 offset) |
+  | MY | No tilt-specific behavior | |
+</Card>
+
+### Nunchuk Support
+
+<Note>
+When a Wii Nunchuk is connected:
+- **Z button** → L trigger (shield)
+- **C button** → Lightshield (analog 49)
+- **Analog stick** → Overrides left stick completely
+</Note>
+
+### C-Stick Disabled in D-Pad Layer
+
+When both **Mod X + Mod Y** are held:
+- C-stick is centered (128, 128)
+- D-Pad inputs are active
+- Prevents accidental C-stick inputs during menu navigation
+
+## Example Usage
+
+```cpp
+#include "modes/RivalsOfAether.hpp"
+
+// Create Rivals mode instance
+RivalsOfAether rivals_mode;
+
+// Configure with SOCD 2IP No Reactivation
+GameModeConfig config = {
+    .mode_id = MODE_RIVALS_OF_AETHER,
+    .socd_pairs_count = 4,
+    .socd_pairs = {
+        SocdPair { .button_dir1 = BTN_LF3, .button_dir2 = BTN_LF1, .socd_type = SOCD_2IP_NO_REAC },
+        SocdPair { .button_dir1 = BTN_LF2, .button_dir2 = BTN_RF4, .socd_type = SOCD_2IP_NO_REAC },
+        SocdPair { .button_dir1 = BTN_RT3, .button_dir2 = BTN_RT5, .socd_type = SOCD_2IP_NO_REAC },
+        SocdPair { .button_dir1 = BTN_RT2, .button_dir2 = BTN_RT4, .socd_type = SOCD_2IP_NO_REAC },
+    },
+};
+
+rivals_mode.SetConfig(config);
+```
+
+## Angle Reference Tables
+
+### Mod X Angles
+
+<Card title="Mod X Angle Breakdown" icon="table">
+  | C-Stick | X Offset | Y Offset | Angle Type |
+  |---------|----------|----------|------------|
+  | None | 59 | 23 | Base |
+  | C-Down | 49 | 24 | DI & Up-B |
+  | C-Left | 52 | 31 | DI |
+  | C-Up | 49 | 35 | DI |
+  | C-Right | 51 | 43 | DI |
+</Card>
+
+### Mod Y Angles
+
+<Card title="Mod Y Angle Breakdown" icon="table">
+  | C-Stick | X Offset | Y Offset | Angle Type |
+  |---------|----------|----------|------------|
+  | None | 44 | 113 | Base |
+  | C-Down | 44 | 90 | DI & Up-B |
+  | C-Left | 44 | 74 | DI |
+  | C-Up | 45 | 63 | DI |
+  | C-Right | 47 | 57 | DI |
+</Card>
+
+## Comparison with Other Modes
+
+<Card title="Mode Comparison" icon="scale-balanced">
+  | Feature | RivalsOfAether | Ultimate |
+  |---------|----------------|----------|
+  | SOCD type | 2IP No Reactivation | 2IP |
+  | Analog range | 28-228 (±100) | 28-228 (±100) |
+  | DI angles | 48 | ~32 |
+  | Up-B angles | 24 | ~16 |
+  | Shield system | L/ZR | ZL/ZR |
+  | Parry button | RF3 (R) | No dedicated |
+</Card>
+
+## Related Modes
+
+- [Ultimate](/api/modes/ultimate) - Similar platform fighter with different angles
+- [Melee20Button](/api/modes/melee20button) - Traditional Smash coordinates
+
+## Source Code
+
+- Header: `include/modes/RivalsOfAether.hpp`
+- Implementation: `src/modes/RivalsOfAether.cpp`

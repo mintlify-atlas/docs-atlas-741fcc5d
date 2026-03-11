@@ -1,0 +1,217 @@
+---
+title: DInputBackend
+description: DirectInput USB communication backend for universal PC compatibility
+icon: keyboard
+---
+
+## Overview
+
+The `DInputBackend` class provides DirectInput (HID gamepad) protocol support. This backend offers maximum compatibility with PC applications, older games, and emulators that don't support XInput.
+
+<Note>
+  DInput is ideal for applications that need standard HID gamepad support or when XInput is not available.
+</Note>
+
+## Platform Support
+
+- **Raspberry Pi Pico**: ✅ Supported
+- **Arduino (AVR with USB)**: ✅ Supported
+
+<Info>
+  The AVR implementation uses the Arduino `Joystick.h` library, while the Pico implementation uses `TUGamepad` from TinyUSB.
+</Info>
+
+## Constructor
+
+### Raspberry Pi Pico
+
+```cpp
+DInputBackend(
+    InputState &inputs,
+    InputSource **input_sources,
+    size_t input_source_count
+)
+```
+
+### Arduino (AVR)
+
+```cpp
+DInputBackend(
+    InputState &inputs,
+    InputSource **input_sources,
+    size_t input_source_count
+)
+```
+
+<ParamField path="inputs" type="InputState&" required>
+  Reference to the global input state structure that tracks all button and analog input values.
+</ParamField>
+
+<ParamField path="input_sources" type="InputSource**" required>
+  Array of pointers to input source objects (GPIO buttons, analog sticks, etc.) that provide input data.
+</ParamField>
+
+<ParamField path="input_source_count" type="size_t" required>
+  Number of elements in the `input_sources` array.
+</ParamField>
+
+## Key Features
+
+### Button Mapping (Pico)
+
+The Pico implementation maps 13 buttons:
+- Button 0: B
+- Button 1: A
+- Button 2: Y
+- Button 3: X
+- Button 4: R (right shoulder)
+- Button 5: RT (right trigger digital)
+- Button 6: L (left shoulder)
+- Button 7: LT (left trigger digital)
+- Button 8: Select/Back
+- Button 9: Start
+- Button 10: Right stick click
+- Button 11: Left stick click
+- Button 12: Home
+
+### Analog Inputs
+
+- **Left Stick**: X/Y axes (8-bit, 0-255)
+- **Right Stick**: X/Y axes (8-bit, 0-255)
+- **Triggers**: L/R analog (8-bit, 0-255)
+- **D-pad**: Hat switch (8 directions + center)
+
+### Y-Axis Inversion
+
+The Pico implementation inverts Y-axes to match standard HID conventions:
+
+```cpp
+_gamepad.leftYAxis(255 - _outputs.leftStickY);
+_gamepad.rightYAxis(255 - _outputs.rightStickY);
+```
+
+## Configuration
+
+To use DInput as your primary backend:
+
+```cpp
+CommunicationBackendConfig backend_config = {
+    .backend_id = COMMS_BACKEND_DINPUT,
+};
+```
+
+## Backend ID
+
+```cpp
+CommunicationBackendId BackendId() {
+    return COMMS_BACKEND_DINPUT;
+}
+```
+
+Returns `COMMS_BACKEND_DINPUT` to identify this backend type.
+
+## SendReport Method
+
+```cpp
+void SendReport();
+```
+
+The `SendReport()` method handles the complete input processing pipeline:
+
+1. Scans inputs at three different speeds (slow, medium, fast)
+2. Waits for HID device to be ready
+3. Updates output state based on game mode logic
+4. Maps outputs to HID gamepad report format
+5. Sends the report via USB
+
+### Input Scanning (Pico)
+
+The Pico backend uses a three-stage scanning approach for optimal latency:
+
+```cpp
+ScanInputs(InputScanSpeed::SLOW);
+ScanInputs(InputScanSpeed::MEDIUM);
+
+while (!_gamepad.ready()) {
+    tight_loop_contents();
+}
+
+ScanInputs(InputScanSpeed::FAST);
+```
+
+### AVR Implementation Notes
+
+The AVR implementation (for Arduino Leonardo, Pro Micro, etc.) uses a single-stage input scan:
+
+```cpp
+ScanInputs();
+UpdateOutputs();
+// Map to Joystick_ object and send
+```
+
+## Usage Example
+
+```cpp
+// In your config file
+#include "comms/DInputBackend.hpp"
+
+static InputState inputs;
+static InputSource *input_sources[] = { &gpio_input };
+size_t input_source_count = 1;
+
+// Create the backend
+DInputBackend dinput_backend(
+    inputs,
+    input_sources,
+    input_source_count
+);
+
+void loop() {
+    // Send controller state to PC
+    dinput_backend.SendReport();
+}
+```
+
+## Destructor
+
+```cpp
+~DInputBackend();
+```
+
+The destructor resets all gamepad inputs to their default state, ensuring clean disconnection.
+
+## Platform Differences
+
+### Raspberry Pi Pico
+- Uses `TUGamepad` class from TinyUSB
+- Supports hat switch for D-pad
+- Includes trigger analog values
+- Y-axis inversion for HID compliance
+
+### Arduino (AVR)
+- Uses `Joystick_` library
+- Standard HID gamepad descriptor
+- Compatible with Leonardo, Pro Micro, etc.
+
+<Warning>
+  The DInput backend is only available on platforms with native USB support. Traditional Arduino boards (Uno, Mega, etc.) without USB HID capability cannot use this backend.
+</Warning>
+
+## Advantages
+
+- **Universal compatibility**: Works with virtually all PC applications that accept gamepad input
+- **No driver required**: Uses standard HID protocol
+- **Multi-platform**: Supported on both Pico and Arduino
+- **Simple integration**: No special host-side configuration needed
+
+## Limitations
+
+- No native rumble support (XInput exclusive feature)
+- Less optimized for modern games compared to XInput
+- Some games may not properly detect analog triggers
+
+## See Also
+
+- [XInputBackend](/api/comms/xinput) - XInput alternative for modern PC games
+- [CommunicationBackend](/api/communication-backend) - Base class for all backends
+- [Input Sources](/customization/input-sources) - Configuring input devices

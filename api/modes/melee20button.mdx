@@ -1,0 +1,301 @@
+---
+title: 'Melee20Button'
+description: 'Standard 20-button Melee mode with dual analog triggers and extended angle support'
+---
+
+## Overview
+
+The `Melee20Button` mode implements the standard B0XX-style 20-button layout for Super Smash Bros. Melee. It features comprehensive modifier support for precise analog inputs, Up-B angles, shield angles, and advanced techniques like ledgedash SOCD override.
+
+## Constructor
+
+```cpp
+Melee20Button()
+```
+
+Creates a new Melee20Button mode instance with default settings.
+
+<ParamField path="return" type="Melee20Button">
+  A new mode instance ready for configuration
+</ParamField>
+
+## Configuration
+
+### SetConfig
+
+```cpp
+void SetConfig(GameModeConfig &config, const MeleeOptions options)
+```
+
+Configures the mode with game-specific settings and options.
+
+<ParamField path="config" type="GameModeConfig&" required>
+  Base configuration including SOCD pairs and button remapping
+</ParamField>
+
+<ParamField path="options" type="MeleeOptions" required>
+  Melee-specific configuration options
+</ParamField>
+
+### MeleeOptions
+
+The `MeleeOptions` struct configures mode-specific behavior:
+
+<ParamField path="crouch_walk_os" type="bool" default="false">
+  Enable crouch walk option select for Q3/Q4 diagonals (7000, 6875 coordinates)
+</ParamField>
+
+<ParamField path="disable_ledgedash_socd_override" type="bool" default="false">
+  Disable horizontal SOCD override for ledgedash maximum jump trajectory
+</ParamField>
+
+<ParamField path="has_custom_airdodge" type="bool" default="false">
+  Enable custom airdodge angle instead of B0XX standard (51, 30)
+</ParamField>
+
+<ParamField path="custom_airdodge.x" type="uint8_t">
+  Custom X-axis coordinate for MX + diagonal + shield (0-100)
+</ParamField>
+
+<ParamField path="custom_airdodge.y" type="uint8_t">
+  Custom Y-axis coordinate for MX + diagonal + shield (0-100)
+</ParamField>
+
+## Button Layout
+
+### Digital Outputs
+
+<Card title="Action Buttons" icon="gamepad">
+  - **A**: RT1
+  - **B**: RF1
+  - **X**: RF2
+  - **Y**: RF6
+  - **L**: LF4 (or Nunchuk Z when connected)
+  - **R**: RF3
+  - **Z**: RF5
+  - **Start**: MB1
+</Card>
+
+### Directional Inputs
+
+<Card title="Movement" icon="arrows-up-down-left-right">
+  - **Left**: LF3
+  - **Right**: LF1
+  - **Down**: LF2
+  - **Up**: RF4
+</Card>
+
+<Card title="C-Stick" icon="circle-dot">
+  - **C-Left**: RT3
+  - **C-Right**: RT5
+  - **C-Down**: RT2
+  - **C-Up**: RT4
+</Card>
+
+### Modifiers
+
+<Card title="Modifier Buttons" icon="sliders">
+  - **Mod X**: LT1
+  - **Mod Y**: LT2
+  - **Lightshield**: RF7 (49 analog)
+  - **Midshield**: RF8 (94 analog)
+</Card>
+
+### D-Pad Layer
+
+Activate by holding **Mod X + Mod Y** or **Nunchuk C**:
+- **D-Up**: RT4
+- **D-Down**: RT2  
+- **D-Left**: RT3 (or MB3)
+- **D-Right**: RT5 (or MB2)
+
+<Note>
+When the D-Pad layer is active, C-stick inputs are disabled.
+</Note>
+
+## Modifier Coordinates
+
+### Mod X (LT1)
+
+<Tabs>
+  <Tab title="Cardinal Directions">
+    | Input | Coordinates | Game Units | Usage |
+    |-------|-------------|------------|-------|
+    | MX + Left/Right | 128 ± 53 | 6625 | Horizontal tilt |
+    | MX + Up/Down | 128 ± 43 | 5375 | Vertical positioning |
+  </Tab>
+  
+  <Tab title="Diagonal + Shield">
+    | Input | Coordinates | Game Units | Angle | Usage |
+    |-------|-------------|------------|-------|-------|
+    | MX + Q1/2/3/4 + Shield | (51, 30) | 6375, 3750 | 30.5° | Airdodge (default) |
+    | Custom airdodge | (custom) | Custom | Custom | User-defined angle |
+  </Tab>
+  
+  <Tab title="Up-B Angles">
+    | Additional Input | Coordinates | Angle | Notes |
+    |-----------------|-------------|-------|-------|
+    | Default | (59, 25) | 22.96° | Firefox base angle |
+    | + C-Down | (56, 29) | 27.38° | |
+    | + C-Left | (63, 39) | 31.78° | |
+    | + C-Up | (56, 41) | 36.19° | |
+    | + C-Right | (49, 42) | 40.59° | |
+  </Tab>
+  
+  <Tab title="Extended Up-B (+ B)">
+    | Additional Input | Coordinates | Angle | Notes |
+    |-----------------|-------------|-------|-------|
+    | + B | (73, 31) | 23.0° | Extended range |
+    | + B + C-Down | (70, 36) | 27.2° | |
+    | + B + C-Left | (68, 42) | 31.7° | |
+    | + B + C-Up | (59, 43) | 36.1° | |
+    | + B + C-Right | (51, 43) | 40.1° | |
+  </Tab>
+</Tabs>
+
+### Mod Y (LT2)
+
+<Tabs>
+  <Tab title="Cardinal Directions">
+    | Input | Coordinates | Game Units | Usage |
+    |-------|-------------|------------|-------|
+    | MY + Left/Right | 128 ± 27 | 3375 | Slow walk |
+    | MY + Up/Down | 128 ± 59 | 7375 | High vertical |
+  </Tab>
+  
+  <Tab title="Diagonal + Shield">
+    | Input | Coordinates | Game Units | Angle | Usage |
+    |-------|-------------|------------|-------|-------|
+    | MY + Q1/2 + Shield | (38, 70) | 4750, 8750 | 61.5° | High angle shield |
+    | MY + Q3/4 + Shield | (40, 68) | 5000, 8500 | 59.5° | Shield drop angle |
+  </Tab>
+  
+  <Tab title="Up-B Angles">
+    | Additional Input | Coordinates | Angle | Notes |
+    |-----------------|-------------|-------|-------|
+    | Default | (25, 59) | 67.04° | Steep Firefox |
+    | + C-Down | (29, 56) | 62.63° | |
+    | + C-Left | (39, 63) | 58.22° | |
+    | + C-Up | (41, 56) | 53.81° | |
+    | + C-Right | (51, 61) | 49.41° | |
+  </Tab>
+  
+  <Tab title="Extended Up-B (+ B)">
+    | Additional Input | Coordinates | Angle | Notes |
+    |-----------------|-------------|-------|-------|
+    | + B | (31, 73) | 67.0° | Extended steep |
+    | + B + C-Down | (36, 70) | 62.8° | |
+    | + B + C-Left | (42, 68) | 58.3° | |
+    | + B + C-Up | (47, 64) | 53.7° | |
+    | + B + C-Right | (47, 57) | 50.5° | |
+  </Tab>
+</Tabs>
+
+### Default Coordinates
+
+<Card title="No Modifiers" icon="circle">
+  | Input | Coordinates | Game Units | Usage |
+  |-------|-------------|------------|-------|
+  | Cardinal | 128 ± 80 | 10000 | Max tilt |
+  | Q1/Q2 Diagonal | (56, 56) | 7000, 7000 | Standard wavedash |
+  | Q3/Q4 Diagonal + Shield | (56, 55) | 7000, 6875 | Shield drop angle |
+</Card>
+
+## Special Features
+
+### SOCD Configuration
+
+<Warning>
+Melee20Button requires **2IP No Reactivation** for all directional pairs:
+- Left/Right (LF3/LF1)
+- Down/Up (LF2/RF4)
+- C-Left/C-Right (RT3/RT5)
+- C-Down/C-Up (RT2/RT4)
+</Warning>
+
+### Ledgedash SOCD Override
+
+When horizontal SOCD is detected (Left + Right pressed simultaneously) and no vertical direction is held:
+- Overrides all X-axis modifiers
+- Sets X coordinate to 128 ± 80 (10000 units)
+- Enables maximum jump trajectory for ledgedash
+- Can be disabled via `disable_ledgedash_socd_override` option
+
+### Angled F-Smash
+
+With **Mod X + C-Left/Right + Up/Down**:
+- C-stick: (68, 42) = 8500, 5250
+- Left stick uses Y-axis direction
+
+### C-Stick ASDI Slideoff
+
+With **diagonal C-stick input** (any combination):
+- Coordinates: (42, 68) = 5250, 8500
+- Overrides other C-stick modifiers
+- Optimal for ASDI down slideoff
+
+### Turnaround Neutral-B Nerf
+
+With **Mod Y + B + Left/Right**:
+- Coordinates: 128 ± 80 (10000 units)
+- Prevents unwanted turnarounds
+
+### Analog Triggers
+
+<Card title="Trigger Values" icon="r">
+  | Trigger | Digital Value | Analog Value |
+  |---------|--------------|---------------|
+  | L Digital | 140 | 140 when pressed |
+  | R Digital | 140 | 140 when pressed |
+  | Lightshield (RF7) | - | 49 |
+  | Midshield (RF8) | - | 94 |
+</Card>
+
+### Nunchuk Support
+
+<Note>
+When a Wii Nunchuk is connected:
+- **Z button** → L trigger
+- **C button** → D-Pad layer activation
+- **Analog stick** → Overrides left stick completely
+</Note>
+
+## Example Usage
+
+```cpp
+#include "modes/Melee20Button.hpp"
+
+// Create mode instance
+Melee20Button melee_mode;
+
+// Configure with options
+GameModeConfig config = {
+    .mode_id = MODE_MELEE,
+    .socd_pairs_count = 4,
+    .socd_pairs = {
+        SocdPair { .button_dir1 = BTN_LF3, .button_dir2 = BTN_LF1, .socd_type = SOCD_2IP_NO_REAC },
+        SocdPair { .button_dir1 = BTN_LF2, .button_dir2 = BTN_RF4, .socd_type = SOCD_2IP_NO_REAC },
+        SocdPair { .button_dir1 = BTN_RT3, .button_dir2 = BTN_RT5, .socd_type = SOCD_2IP_NO_REAC },
+        SocdPair { .button_dir1 = BTN_RT2, .button_dir2 = BTN_RT4, .socd_type = SOCD_2IP_NO_REAC },
+    },
+};
+
+MeleeOptions options = {
+    .crouch_walk_os = false,
+    .disable_ledgedash_socd_override = false,
+    .has_custom_airdodge = true,
+    .custom_airdodge = { .x = 52, .y = 31 }  // Custom 31° airdodge
+};
+
+melee_mode.SetConfig(config, options);
+```
+
+## Related Modes
+
+- [Melee18Button](/api/modes/melee18button) - 18-button variant without dedicated analog triggers
+- [ProjectM](/api/modes/projectm) - Project M/Project+ specific coordinates
+
+## Source Code
+
+- Header: `include/modes/Melee20Button.hpp`
+- Implementation: `src/modes/Melee20Button.cpp`

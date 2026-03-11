@@ -1,0 +1,251 @@
+---
+title: Console Selection
+description: Learn how to customize backend selection and polling rates in HayBox firmware
+---
+
+## Overview
+
+HayBox's communication backend selection allows your controller to work with different consoles and PC setups. The backend is selected through auto-detection and button holds on plugin, and you can customize this behavior in your device's `config.cpp` file.
+
+## Backend Selection Logic
+
+Backend selection happens in the `setup()` function of your config file (e.g., `config/pico/config.cpp` or `config/arduino/config.cpp`).
+
+### Pico/RP2040 Devices
+
+On Pico-based controllers, USB vs GameCube vs Nintendo 64 is detected automatically using the `detect_console()` function.
+
+<CodeGroup>
+```cpp config/pico/config.cpp
+void setup() {
+    static InputState inputs;
+
+    // Create GPIO input source and read button states
+    gpio_input.UpdateInputs(inputs);
+
+    // Check bootsel button hold (RT2/C-Down)
+    if (inputs.rt2) {
+        reboot_bootloader();
+    }
+
+    // Initialize backends with auto-detection
+    backend_count = initialize_backends(
+        backends, 
+        inputs, 
+        input_sources, 
+        input_source_count, 
+        config, 
+        pinout
+    );
+}
+```
+
+```cpp Default USB Backend
+// If not plugged into a console, default is XInput
+// Other backends selected by button holds:
+// - RF2 (X): Nintendo Switch USB mode
+// - RF3 (Z): DInput mode
+```
+</CodeGroup>
+
+<Note>
+Pico devices don't require polling rate configuration because they have enough processing power to read inputs after receiving the console poll.
+</Note>
+
+### Arduino/AVR Devices
+
+On Arduino-based controllers, the backend selection is more explicit:
+
+<CodeGroup>
+```cpp config/arduino/config.cpp
+void setup() {
+    static InputState inputs;
+
+    // Create GPIO input source
+    static GpioButtonInput gpio_input(button_mappings, button_count);
+    gpio_input.UpdateInputs(inputs);
+
+    // Create array of input sources
+    static InputSource *input_sources[] = { &gpio_input };
+    size_t input_source_count = sizeof(input_sources) / sizeof(InputSource *);
+
+    // Initialize backends with detection
+    backend_count = initialize_backends(
+        backends,
+        inputs,
+        input_sources,
+        input_source_count,
+        config,
+        pinout
+    );
+}
+```
+
+```cpp Button Holds for Arduino
+// Default: DInput for USB, GameCube for console
+// Button holds on plugin:
+// - RT1 (A): GameCube with polling fix disabled
+// - RT3 (C-Left): Nintendo 64 backend (60Hz)
+```
+</CodeGroup>
+
+## Polling Rate Configuration
+
+### GameCube Polling Rates
+
+For Arduino/AVR controllers, you can configure the polling rate to match your setup. This is especially important for overclocked adapters.
+
+<Steps>
+  <Step title="Understand Polling Rates">
+    The polling rate tells the firmware when to expect the next poll from the console or adapter. Common rates:
+    - **125Hz**: Native GameCube console
+    - **1000Hz**: Overclocked GameCube adapters
+    - **0**: Disables the polling fix (for official adapters)
+  </Step>
+
+  <Step title="Locate Backend Initialization">
+    Find where `GamecubeBackend` is created in your backend initialization code. The polling rate is passed as a parameter to the constructor.
+  </Step>
+
+  <Step title="Set Your Polling Rate">
+    Pass the appropriate polling rate value:
+
+    ```cpp
+    // For native console (125Hz)
+    new GamecubeBackend(inputs, input_sources, input_source_count, 125, pinout.joybus_data);
+
+    // For overclocked adapter (1000Hz) 
+    new GamecubeBackend(inputs, input_sources, input_source_count, 1000, pinout.joybus_data);
+
+    // For official adapter (disable fix)
+    new GamecubeBackend(inputs, input_sources, input_source_count, 0, pinout.joybus_data);
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+Using 1000Hz polling rate on console will result in **more input lag**, not less. Only use 1000Hz for overclocked adapters on PC.
+</Warning>
+
+### N64 Polling Rates
+
+Nintendo 64 backend works similarly:
+
+```cpp
+// N64 runs at 60Hz
+new N64Backend(inputs, input_sources, input_source_count, 60, pinout.joybus_data);
+```
+
+## Understanding the Initialization Process
+
+The `initialize_backends()` function handles:
+
+1. **Console Detection**: Checks if plugged into GameCube/N64
+2. **Button Hold Detection**: Reads which buttons are held on plugin
+3. **Backend Selection**: Chooses appropriate backend based on detection
+4. **Secondary Backends**: Initializes additional backends (e.g., B0XX input viewer)
+
+### Backend Configuration Structure
+
+Backends are configured in `config_defaults.hpp`:
+
+```cpp
+.communication_backend_configs = {
+    CommunicationBackendConfig {
+        .backend_id = COMMS_BACKEND_XINPUT,
+        .default_mode_config = 1,
+    },
+    CommunicationBackendConfig {
+        .backend_id = COMMS_BACKEND_DINPUT,
+        .default_mode_config = 1,
+        .activation_binding_count = 1,
+        .activation_binding = { BTN_RF3 }, // Hold Z for DInput
+    },
+    CommunicationBackendConfig {
+        .backend_id = COMMS_BACKEND_NINTENDO_SWITCH,
+        .default_mode_config = 3,
+        .activation_binding_count = 1,
+        .activation_binding = { BTN_RF2 }, // Hold X for Switch
+    },
+}
+```
+
+## Custom Backend Selection
+
+You can implement custom backend selection logic by providing a custom function to `initialize_backends()`:
+
+```cpp
+void custom_backend_selector(
+    CommunicationBackendConfig &backend_config,
+    const InputState &inputs,
+    Config &config
+) {
+    // Your custom logic here
+    if (inputs.rf1 && inputs.rf2) {
+        backend_config.backend_id = COMMS_BACKEND_DINPUT;
+    }
+}
+
+void setup() {
+    // Pass custom selector to initialize_backends
+    backend_count = initialize_backends(
+        backends,
+        inputs,
+        input_sources,
+        input_source_count,
+        config,
+        pinout,
+        custom_backend_selector  // Custom selector function
+    );
+}
+```
+
+## Available Backends
+
+<ParamField path="COMMS_BACKEND_XINPUT" type="Backend">
+  XInput mode for PC gaming. Default for Pico on USB. Works plug-and-play with most PC games.
+</ParamField>
+
+<ParamField path="COMMS_BACKEND_DINPUT" type="Backend">
+  DirectInput mode for PC. Default for Arduino on USB. Supports keyboard modes.
+</ParamField>
+
+<ParamField path="COMMS_BACKEND_NINTENDO_SWITCH" type="Backend">
+  Nintendo Switch USB mode. Automatically sets Ultimate mode as default.
+</ParamField>
+
+<ParamField path="COMMS_BACKEND_GAMECUBE" type="Backend">
+  GameCube console communication. Auto-detected when plugged into GameCube.
+</ParamField>
+
+<ParamField path="COMMS_BACKEND_N64" type="Backend">
+  Nintendo 64 console communication. Auto-detected or selected via button hold.
+</ParamField>
+
+## Troubleshooting
+
+### Controller Not Working with Console
+
+<AccordionGroup>
+  <Accordion title="Official Adapter with Arduino">
+    Hold A (RT1) on plugin to disable the polling fix by passing `0` as the polling rate.
+  </Accordion>
+
+  <Accordion title="Arduino Without Boost Circuit">
+    Requires 5V power:
+    - Mayflash adapter: Both USB cables plugged in
+    - Console: Rumble line must be intact
+    
+    Pico devices work natively with 3.3V.
+  </Accordion>
+
+  <Accordion title="High Latency on Console">
+    Make sure you're using the correct polling rate (125Hz for native console). Using 1000Hz on console causes increased input lag.
+  </Accordion>
+</AccordionGroup>
+
+## See Also
+
+- [Mode Selection](/customization/mode-selection) - Configure game mode bindings
+- [Input Sources](/customization/input-sources) - Add Nunchuk or other input sources
+- [Creating Custom Modes](/customization/controller-modes) - Build your own controller modes

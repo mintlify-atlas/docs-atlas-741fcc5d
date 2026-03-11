@@ -1,0 +1,269 @@
+---
+title: 'FgcMode'
+description: 'Fighting game controller mode with D-Pad directional inputs and 8-button layout'
+---
+
+## Overview
+
+The `FgcMode` is designed for traditional fighting games using a hitbox-style layout. It maps all directional inputs to D-Pad buttons (no analog stick movement) and provides an 8-button action layout matching arcade stick conventions.
+
+## Constructor
+
+```cpp
+FgcMode()
+```
+
+Creates a new FgcMode instance with default settings.
+
+<ParamField path="return" type="FgcMode">
+  A new mode instance ready for use
+</ParamField>
+
+## Button Layout
+
+### Directional Inputs (D-Pad)
+
+<Card title="Movement" icon="dpad">
+  All directional inputs map to D-Pad digital outputs:
+  
+  - **Left**: LF3
+  - **Right**: LF1
+  - **Down**: LF2
+  - **Up**: LT1
+</Card>
+
+<Note>
+Unlike platform fighter modes, FgcMode uses **LT1 for Up** instead of RF4, providing a more ergonomic left-hand directional cluster.
+</Note>
+
+### Action Buttons
+
+<Tabs>
+  <Tab title="Bottom Row">
+    Standard fighting game bottom row (typically light buttons):
+    
+    - **A (Light Punch)**: RF1
+    - **B (Light Kick)**: RF2
+    - **RT (Right Trigger)**: RF3
+    - **LT (Left Trigger)**: RF4
+  </Tab>
+  
+  <Tab title="Top Row">
+    Standard fighting game top row (typically heavy buttons):
+    
+    - **X (Heavy Punch)**: RF5
+    - **Y (Heavy Kick)**: RF6
+    - **RB (Right Bumper)**: RF7
+    - **LB (Left Bumper)**: RF8
+  </Tab>
+</Tabs>
+
+<Card title="Button Layout Visualization" icon="grid">
+  ```
+  Right Hand Layout:
+  
+  Top Row:     [X]  [Y]  [RB] [LB]
+              RF5  RF6  RF7  RF8
+  
+  Bottom Row:  [A]  [B]  [RT] [LT]
+              RF1  RF2  RF3  RF4
+  
+  Left Hand Layout:
+  
+              [Up]
+              LT1
+  
+  [Left] [Down] [Right]
+   LF3    LF2     LF1
+  ```
+</Card>
+
+### Menu Buttons
+
+<Card title="System Buttons" icon="bars">
+  - **Start**: MB1
+  - **Select**: RT3
+  - **Home**: RT2
+  - **Left Stick Click**: LT2
+  - **Right Stick Click**: RT1
+</Card>
+
+## Analog Behavior
+
+<Warning>
+FgcMode disables all analog stick movement. The analog outputs are centered:
+
+- **Left Stick X**: 128 (neutral)
+- **Left Stick Y**: 128 (neutral)
+- **Right Stick X**: 128 (neutral)
+- **Right Stick Y**: 128 (neutral)
+- **Left Trigger**: 0 or 255 (digital)
+- **Right Trigger**: 0 or 255 (digital)
+</Warning>
+
+This ensures clean digital inputs for fighting game precision.
+
+## SOCD Configuration
+
+<Note>
+FgcMode uses **SOCD_NEUTRAL** (Simultaneous Opposite Cardinal Direction cleaning) by default:
+
+- **Left + Right** → Neutral (no input)
+- **Down + Up** → Neutral (no input)
+
+This is the standard for most fighting game tournaments and matches hitbox conventions.
+</Note>
+
+### Recommended SOCD Setup
+
+```cpp
+GameModeConfig config = {
+    .mode_id = MODE_FGC,
+    .socd_pairs_count = 2,
+    .socd_pairs = {
+        SocdPair { .button_dir1 = BTN_LF3, .button_dir2 = BTN_LF1, .socd_type = SOCD_NEUTRAL },
+        SocdPair { .button_dir1 = BTN_LF2, .button_dir2 = BTN_LT1, .socd_type = SOCD_NEUTRAL },
+    },
+};
+```
+
+<Warning>
+Note the Up button is **BTN_LT1** in FgcMode, not BTN_RF4 like in Smash modes.
+</Warning>
+
+## Button Remapping
+
+FgcMode often benefits from button remapping for the Up button. Example configuration:
+
+```cpp
+GameModeConfig config = {
+    .mode_id = MODE_FGC,
+    .button_remapping_count = 1,
+    .button_remapping = {
+        ButtonRemap { .physical_button = BTN_RT4, .activates = BTN_LT1 },
+    },
+};
+```
+
+This remaps RT4 to also activate the Up input (LT1), providing an alternative Up button placement.
+
+## Example Usage
+
+```cpp
+#include "modes/FgcMode.hpp"
+
+// Create FGC mode instance
+FgcMode fgc_mode;
+
+// Configure with SOCD neutral
+GameModeConfig config = {
+    .mode_id = MODE_FGC,
+    .socd_pairs_count = 2,
+    .socd_pairs = {
+        SocdPair { .button_dir1 = BTN_LF3, .button_dir2 = BTN_LF1, .socd_type = SOCD_NEUTRAL },
+        SocdPair { .button_dir1 = BTN_LF2, .button_dir2 = BTN_LT1, .socd_type = SOCD_NEUTRAL },
+    },
+    .button_remapping_count = 1,
+    .button_remapping = {
+        ButtonRemap { .physical_button = BTN_RT4, .activates = BTN_LT1 },
+    },
+};
+
+fgc_mode.SetConfig(config);
+```
+
+## Game-Specific Mappings
+
+FgcMode works well with various fighting games:
+
+<Tabs>
+  <Tab title="Street Fighter">
+    | Button | Action |
+    |--------|--------|
+    | A (RF1) | Light Punch |
+    | B (RF2) | Light Kick |
+    | RT (RF3) | Medium Punch |
+    | LT (RF4) | Medium Kick |
+    | X (RF5) | Heavy Punch |
+    | Y (RF6) | Heavy Kick |
+    | RB (RF7) | 3P Macro |
+    | LB (RF8) | 3K Macro |
+  </Tab>
+  
+  <Tab title="Guilty Gear / ArcSys">
+    | Button | Action |
+    |--------|--------|
+    | A (RF1) | Punch |
+    | B (RF2) | Kick |
+    | RT (RF3) | Slash |
+    | LT (RF4) | Heavy Slash |
+    | X (RF5) | Dust |
+    | Y (RF6) | Roman Cancel |
+    | RB (RF7) | Dash Macro |
+    | LB (RF8) | Burst |
+  </Tab>
+  
+  <Tab title="Mortal Kombat">
+    | Button | Action |
+    |--------|--------|
+    | A (RF1) | Front Punch |
+    | B (RF2) | Front Kick |
+    | RT (RF3) | Back Punch |
+    | LT (RF4) | Back Kick |
+    | X (RF5) | Stance Switch |
+    | Y (RF6) | Block |
+    | RB (RF7) | Throw |
+    | LB (RF8) | Interaction |
+  </Tab>
+</Tabs>
+
+## Features
+
+### Pure Digital Input
+
+<Card title="Digital Precision" icon="circle-dot">
+  FgcMode provides:
+  - No analog stick drift
+  - Frame-perfect directional inputs
+  - Consistent motion inputs
+  - Tournament-legal SOCD handling
+</Card>
+
+### Eight-Button Layout
+
+<Card title="Arcade Standard" icon="gamepad">
+  The 8-button layout (2 rows of 4) matches:
+  - Arcade stick button placement
+  - Hitbox-style controllers
+  - Traditional fighting game conventions
+  - Easy muscle memory transfer
+</Card>
+
+### No Modifiers
+
+<Note>
+FgcMode intentionally has no modifier buttons or analog coordinates. All inputs are direct digital mappings for maximum simplicity and consistency.
+</Note>
+
+## Differences from Platform Fighter Modes
+
+<Card title="Key Differences" icon="scale-balanced">
+  | Feature | FgcMode | Melee/Ultimate |
+  |---------|---------|----------------|
+  | Directional output | D-Pad only | Analog stick |
+  | Up button | LT1 | RF4 |
+  | SOCD handling | Neutral | 2IP / 2IP No Reac |
+  | Action buttons | 8 (2 rows of 4) | 7 + triggers |
+  | Modifiers | None | MX/MY |
+  | Analog coordinates | Disabled | Complex system |
+</Card>
+
+## Related Modes
+
+- [Ultimate](/api/modes/ultimate) - Platform fighter with analog inputs
+- [Melee20Button](/api/modes/melee20button) - GameCube-style layout
+
+## Source Code
+
+- Header: `include/modes/FgcMode.hpp`
+- Implementation: `src/modes/FgcMode.cpp`

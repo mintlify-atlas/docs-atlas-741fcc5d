@@ -1,0 +1,228 @@
+---
+title: Melee Mode Features
+description: Advanced configuration options for Melee20Button and Melee18Button modes
+---
+
+## Overview
+
+HayBox provides two Melee mode variants with configurable options to suit different playstyles and techniques:
+
+- **Melee20Button** - Standard mode with dedicated lightshield buttons (RF7/RF8)
+- **Melee18Button** - Alternative mode where Mod X provides lightshield, and R provides shield tilt
+
+## Crouch Walk Option Select
+
+### What is it?
+
+The `crouch_walk_os` option changes the coordinates used when pressing down + right (or down + left). This affects two competing techniques:
+
+1. **Jab-cancel** (default: `crouch_walk_os = false`) - Down + back at specific coordinates allows automatic jab-canceling, useful for characters like Fox and Falco
+2. **Crouch-walk option-select** (`crouch_walk_os = true`) - Down + forward at a specific angle that transitions from crouch to walk after crouch-cancelling an attack, useful for tech-chasing
+
+<Warning>
+These two techniques use different coordinates and cannot both be active simultaneously. Choose based on your character and playstyle.
+</Warning>
+
+### Coordinates
+
+When `crouch_walk_os` is enabled:
+
+```cpp
+// Melee20Button.cpp - Line 74
+if (directions.y == -1 && (shield_button_pressed || _options.crouch_walk_os)) {
+    outputs.leftStickX = 128 + (directions.x * 56);  // 7000
+    outputs.leftStickY = 128 + (directions.y * 55);  // 6875
+}
+```
+
+**Default (jab-cancel)**: Down + back uses standard diagonal coordinates (7000, 7000)
+
+**Crouch-walk OS enabled**: Down + forward uses (7000, 6875) coordinates
+
+### Configuration
+
+<Accordion title="In config_defaults.hpp (default on plugin)">
+
+```cpp
+const Config default_config = {
+    // ...
+    .melee_options = {
+        .crouch_walk_os = false,  // Set to true for crouch-walk OS
+        .disable_ledgedash_socd_override = false,
+    },
+    // ...
+};
+```
+
+This configuration in `/HAL/pico/include/config_defaults.hpp` determines which coordinates are used when the controller is first plugged in.
+
+</Accordion>
+
+<Accordion title="Runtime configuration via Config Tool">
+
+If you have the HayBox Config Tool enabled, you can change this option without reflashing:
+
+1. Hold **MB1 (Start)** on plugin to enter config mode
+2. Open the HayBox Config Tool web interface
+3. Navigate to Melee mode settings
+4. Toggle the "Crouch Walk OS" option
+5. Save configuration
+
+</Accordion>
+
+## Melee20Button vs Melee18Button
+
+### Key Differences
+
+The main difference between these modes is how lightshield and shield tilt are accessed:
+
+<Tabs>
+  <Tab title="Melee20Button">
+
+**Lightshield Buttons**: Dedicated RF7 and RF8 buttons
+
+```cpp
+// Melee20Button.cpp - Lines 259-264
+if (inputs.rf7) {
+    outputs.triggerRAnalog = 49;  // Lightshield
+}
+if (inputs.rf8) {
+    outputs.triggerRAnalog = 94;  // Midshield
+}
+```
+
+**Shield Mechanics**:
+
+- RF7 → Lightshield (analog value 49)
+- RF8 → Midshield (analog value 94)
+- RF5 (R button) → Hard shield with digital trigger
+- Mod X + diagonal + shield → Airdodge angles
+
+</Tab>
+  <Tab title="Melee18Button">
+
+**Lightshield via Modifiers**: Mod X and Mod Y with L button
+
+```cpp
+// Melee18Button.cpp - Lines 229-248
+if (inputs.lf4) {  // L button pressed
+    // L + Mod X = midshield
+    if (inputs.lt1) {
+        outputs.triggerLDigital = false;
+        outputs.triggerRAnalog = 94;  // Midshield
+
+        if (directions.diagonal) {
+            outputs.leftStickX = 128 + (directions.x * 51);
+            outputs.leftStickY = 128 + (directions.y * 30);
+        }
+    }
+    // L + Mod Y = lightshield
+    if (inputs.lt2) {
+        outputs.triggerLDigital = false;
+        outputs.triggerRAnalog = 49;  // Lightshield
+
+        if (directions.diagonal) {
+            outputs.leftStickX = 128 + (directions.x * 40);
+            outputs.leftStickY = 128 + (directions.y * 68);
+        }
+    }
+}
+```
+
+**Shield Mechanics**:
+
+- L + Mod X → Midshield (analog value 94)
+- L + Mod Y → Lightshield (analog value 49)
+- RF5 (R button) → Shield tilt coordinates
+- R + diagonal → Shield tilt angles
+
+</Tab>
+</Tabs>
+
+### R Button Shield Tilt (Melee18Button only)
+
+```cpp
+// Melee18Button.cpp - Lines 252-270
+if (inputs.rf5) {  // R button
+    if (directions.horizontal) {
+        outputs.leftStickX = 128 + (directions.x * 51);  // 6500 horizontal
+    }
+    if (directions.vertical) {
+        outputs.leftStickY = 128 + (directions.y * 43);  // 5500 vertical
+    }
+    if (directions.diagonal) {
+        outputs.leftStickX = 128 + (directions.x * 43);
+        // Mod X overrides for airdodge angle
+        if (inputs.lt1) {
+            outputs.leftStickX = 128 + (directions.x * 51);
+            outputs.leftStickY = 128 + (directions.y * 30);
+        }
+    }
+}
+```
+
+<Info>
+**When to use Melee18Button**: If your controller has 18 buttons or you prefer using modifiers for lightshield rather than dedicated buttons. This frees up RF7 and RF8 for other functions.
+</Info>
+
+## Ledgedash Maximum Jump Trajectory
+
+Both Melee modes include a special behavior when left and right are held simultaneously:
+
+```cpp
+// Melee20Button.cpp - Lines 254-257
+if (!_options.disable_ledgedash_socd_override && _horizontal_socd && !directions.vertical) {
+    outputs.leftStickX = 128 + (directions.x * 80);  // 1.0 cardinal
+}
+```
+
+**Purpose**: When left and right are both held (horizontal SOCD), the stick outputs a perfect 1.0 cardinal direction, which gives maximum jump trajectory for ledgedashing.
+
+**Configuration**: This can be disabled by setting `disable_ledgedash_socd_override = true` in the config.
+
+<Note>
+This feature overrides all modifier coordinates when horizontal SOCD occurs without a vertical direction being held.
+</Note>
+
+## Switching Between Modes
+
+To select your preferred Melee mode, edit `config_defaults.hpp`:
+
+```cpp
+GameModeConfig {
+    .mode_id = MODE_MELEE,  // Use MODE_MELEE for Melee20Button
+    .socd_pairs_count = 4,
+    // ...
+    .activation_binding_count = 3,
+    .activation_binding = { BTN_LT1, BTN_MB1, BTN_LF4 },  // Start + Mod X + L
+}
+```
+
+Mode selection is handled in the mode instantiation. The firmware determines which implementation to use based on the MODE_MELEE or MODE_MELEE_18B mode ID.
+
+## Custom Airdodge Angles
+
+<Info>
+Custom airdodge angles are available in Melee20Button mode for controllers with the `has_custom_airdodge` option enabled.
+</Info>
+
+```cpp
+// Melee20Button.cpp - Lines 92-94
+if (_options.has_custom_airdodge) {
+    outputs.leftStickX = 128 + (directions.x * _options.custom_airdodge.x);
+    outputs.leftStickY = 128 + (directions.y * _options.custom_airdodge.y);
+}
+```
+
+This allows you to define custom X and Y coordinates for airdodge angles when using Mod X + diagonal + shield.
+
+## Summary
+
+| Feature | Melee20Button | Melee18Button |
+|---------|---------------|---------------|
+| Lightshield buttons | RF7 (49), RF8 (94) | L + Mod X (94), L + Mod Y (49) |
+| R button function | Hard shield (digital) | Shield tilt coordinates |
+| Crouch walk OS | Configurable | Configurable |
+| Ledgedash SOCD | Enabled by default | Enabled by default |
+| Custom airdodge | Supported | Not applicable |
+| Button count | 20 buttons | 18 buttons |

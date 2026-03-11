@@ -1,0 +1,586 @@
+---
+title: "CommunicationBackend"
+description: "Base class for managing input/output and USB communication in HayBox firmware"
+---
+
+## Overview
+
+`CommunicationBackend` is an abstract base class that orchestrates the flow of data from input sources through game modes to output reports. It manages input scanning, output generation, and provides the interface for sending reports to the host device via USB or other communication protocols.
+
+## Class Definition
+
+```cpp
+class CommunicationBackend {
+  public:
+    CommunicationBackend(
+        InputState &inputs,
+        InputSource **input_sources,
+        size_t input_source_count
+    );
+    virtual ~CommunicationBackend(){}
+
+    InputState &GetInputs();
+    OutputState &GetOutputs();
+    void ScanInputs();
+    void ScanInputs(InputScanSpeed input_source_filter);
+
+    virtual void UpdateOutputs();
+    virtual CommunicationBackendId BackendId();
+    virtual void SetGameMode(InputMode *gamemode);
+    virtual InputMode *CurrentGameMode();
+
+    virtual void SendReport() = 0;
+
+  protected:
+    InputState &_inputs;
+    InputSource **_input_sources;
+    size_t _input_source_count;
+
+    OutputState _outputs;
+    InputMode *_gamemode = nullptr;
+
+  private:
+    void ResetOutputs();
+};
+```
+
+## Constructor & Destructor
+
+### CommunicationBackend
+
+```cpp
+CommunicationBackend::CommunicationBackend(
+    InputState &inputs,
+    InputSource **input_sources,
+    size_t input_source_count
+)
+```
+
+Initializes a communication backend instance.
+
+<ParamField path="inputs" type="InputState&">
+  Reference to the shared input state structure. This is typically a global or static variable that persists for the lifetime of the program.
+</ParamField>
+
+<ParamField path="input_sources" type="InputSource**">
+  Array of pointers to input source objects. The backend will scan these sources to populate the input state.
+</ParamField>
+
+<ParamField path="input_source_count" type="size_t">
+  Number of input sources in the array.
+</ParamField>
+
+**Implementation:**
+- Stores references to inputs and input sources
+- Initializes game mode to `nullptr`
+- Does not take ownership of input sources (caller must manage their lifetime)
+
+### ~CommunicationBackend
+
+```cpp
+virtual ~CommunicationBackend(){}
+```
+
+Virtual destructor for proper cleanup of derived classes.
+
+## Public Methods
+
+### GetInputs
+
+```cpp
+InputState &GetInputs()
+```
+
+Returns a reference to the current input state.
+
+**Returns:** Reference to the `InputState` structure containing all button states.
+
+**Usage:**
+```cpp
+InputState &inputs = backend.GetInputs();
+if (inputs.lf1) {
+    // Handle button press
+}
+```
+
+### GetOutputs
+
+```cpp
+OutputState &GetOutputs()
+```
+
+Returns a reference to the current output state.
+
+**Returns:** Reference to the `OutputState` structure containing all controller outputs.
+
+**Usage:**
+```cpp
+OutputState &outputs = backend.GetOutputs();
+Serial.print("Left Stick X: ");
+Serial.println(outputs.leftStickX);
+```
+
+### ScanInputs
+
+```cpp
+void ScanInputs()
+```
+
+Scans all input sources and updates the input state.
+
+**Behavior:**
+- Calls `UpdateInputs()` on every registered input source
+- Combines inputs from all sources into the shared input state
+
+**Usage:**
+```cpp
+void loop() {
+    backend.ScanInputs();  // Read all buttons
+    backend.UpdateOutputs();  // Process through game mode
+    backend.SendReport();  // Send to host
+}
+```
+
+### ScanInputs (with filter)
+
+```cpp
+void ScanInputs(InputScanSpeed input_source_filter)
+```
+
+Selectively scans only input sources that match the specified scan speed.
+
+<ParamField path="input_source_filter" type="InputScanSpeed">
+  Only scan input sources with this scan speed (`SLOW`, `MEDIUM`, or `FAST`)
+</ParamField>
+
+**Behavior:**
+- Iterates through all input sources
+- Calls `UpdateInputs()` only on sources where `ScanSpeed()` matches the filter
+- Useful for optimizing performance by scanning high-priority inputs more frequently
+
+**Usage:**
+```cpp
+void loop() {
+    // Scan high-priority button inputs every iteration
+    backend.ScanInputs(InputScanSpeed::FAST);
+    
+    backend.UpdateOutputs();
+    backend.SendReport();
+    
+    // Scan lower-priority inputs less frequently
+    static uint32_t last_scan = 0;
+    if (millis() - last_scan > 100) {
+        backend.ScanInputs(InputScanSpeed::MEDIUM);
+        backend.ScanInputs(InputScanSpeed::SLOW);
+        last_scan = millis();
+    }
+}
+```
+
+### UpdateOutputs
+
+```cpp
+virtual void UpdateOutputs()
+```
+
+Processes the current input state through the active game mode to generate outputs.
+
+**Behavior:**
+1. Resets output state to neutral via `ResetOutputs()`
+2. If a game mode is set, calls `_gamemode->UpdateOutputs(_inputs, _outputs)`
+3. If no game mode is set, outputs remain at neutral
+
+**Usage:**
+```cpp
+backend.ScanInputs();
+backend.UpdateOutputs();  // Convert inputs to outputs
+backend.SendReport();     // Send outputs to host
+```
+
+<Note>
+  This method is virtual and can be overridden by derived backends that need custom output processing logic.
+</Note>
+
+### BackendId
+
+```cpp
+virtual CommunicationBackendId BackendId()
+```
+
+Returns the identifier for this backend type.
+
+**Returns:** A `CommunicationBackendId` enum value identifying the backend.
+
+**Default Implementation:** Returns `COMMS_BACKEND_UNSPECIFIED`
+
+**Common Backend IDs:**
+- `COMMS_BACKEND_DINPUT` - DirectInput (generic USB gamepad)
+- `COMMS_BACKEND_XINPUT` - XInput (Xbox 360 controller)
+- `COMMS_BACKEND_NINTENDO_SWITCH` - Nintendo Switch Pro Controller
+- `COMMS_BACKEND_GAMECUBE` - GameCube controller
+- `COMMS_BACKEND_N64` - N64 controller
+- `COMMS_BACKEND_SNES` - SNES controller
+- `COMMS_BACKEND_NES` - NES controller
+
+### SetGameMode
+
+```cpp
+virtual void SetGameMode(InputMode *gamemode)
+```
+
+Sets the active game mode for input processing.
+
+<ParamField path="gamemode" type="InputMode*">
+  Pointer to the game mode to activate. Can be `nullptr` to disable output processing.
+</ParamField>
+
+**Usage:**
+```cpp
+Melee20Button melee_mode;
+backend.SetGameMode(&melee_mode);
+
+// Later, switch modes
+Ultimate ultimate_mode;
+backend.SetGameMode(&ultimate_mode);
+```
+
+<Warning>
+  The backend does not take ownership of the game mode object. Ensure the game mode remains valid for the lifetime it's set as active.
+</Warning>
+
+### CurrentGameMode
+
+```cpp
+virtual InputMode *CurrentGameMode()
+```
+
+Returns a pointer to the currently active game mode.
+
+**Returns:** Pointer to the current `InputMode`, or `nullptr` if no mode is set.
+
+**Usage:**
+```cpp
+InputMode *mode = backend.CurrentGameMode();
+if (mode != nullptr) {
+    GameModeConfig *config = mode->GetConfig();
+    // Access mode configuration
+}
+
+// Check for specific mode type
+if (KeyboardMode *kb = dynamic_cast<KeyboardMode*>(backend.CurrentGameMode())) {
+    kb->SendReport(backend.GetInputs());
+}
+```
+
+## Pure Virtual Methods
+
+### SendReport
+
+```cpp
+virtual void SendReport() = 0
+```
+
+Sends the current output state to the host device.
+
+**Implementation Requirements:**
+- Read the current `_outputs` state
+- Format and send the appropriate USB HID report for the backend type
+- Handle any backend-specific communication protocols
+
+**Example Implementation:**
+See [Built-in Backend Implementations](#built-in-backend-implementations) below.
+
+## Protected Members
+
+### _inputs
+
+```cpp
+InputState &_inputs;
+```
+
+Reference to the shared input state structure.
+
+### _input_sources
+
+```cpp
+InputSource **_input_sources;
+```
+
+Array of pointers to registered input sources.
+
+### _input_source_count
+
+```cpp
+size_t _input_source_count;
+```
+
+Number of input sources in the array.
+
+### _outputs
+
+```cpp
+OutputState _outputs;
+```
+
+The current output state generated by the game mode.
+
+### _gamemode
+
+```cpp
+InputMode *_gamemode = nullptr;
+```
+
+Pointer to the currently active game mode.
+
+## Built-in Backend Implementations
+
+HayBox includes several concrete implementations of `CommunicationBackend` for different output protocols:
+
+### DInputBackend
+
+```cpp
+class DInputBackend : public CommunicationBackend {
+  public:
+    DInputBackend(InputState &inputs, InputSource **input_sources, size_t input_source_count);
+    ~DInputBackend();
+    CommunicationBackendId BackendId();
+    void SendReport();
+
+  private:
+    TUGamepad _gamepad;
+};
+```
+
+Provides DirectInput (generic USB gamepad) support with 18 buttons and 6 analog axes.
+
+### XInputBackend
+
+Emulates an Xbox 360 controller. Compatible with games that require XInput.
+
+### NintendoSwitchBackend
+
+Emulates a Nintendo Switch Pro Controller with proper USB descriptors and protocol.
+
+### GamecubeBackend
+
+Communicates using the GameCube controller protocol over a data pin.
+
+### N64Backend
+
+Communicates using the N64 controller protocol.
+
+### SnesBackend / NesBackend
+
+Communicates using SNES/NES controller protocols.
+
+## Usage Example
+
+### Basic Setup
+
+```cpp
+#include "core/CommunicationBackend.hpp"
+#include "comms/DInputBackend.hpp"
+#include "input/GpioButtonInput.hpp"
+#include "modes/Melee20Button.hpp"
+
+// Global input state
+InputState input_state;
+
+// Define input sources
+const GpioButtonMapping button_mappings[] = { /* ... */ };
+GpioButtonInput gpio_input(button_mappings, button_count);
+
+InputSource *input_sources[] = {
+    &gpio_input,
+};
+
+// Create backend
+DInputBackend backend(
+    input_state,
+    input_sources,
+    sizeof(input_sources) / sizeof(InputSource*)
+);
+
+// Create and set game mode
+Melee20Button melee_mode;
+
+void setup() {
+    backend.SetGameMode(&melee_mode);
+}
+
+void loop() {
+    backend.ScanInputs();
+    backend.UpdateOutputs();
+    backend.SendReport();
+}
+```
+
+### Handling Keyboard Mode
+
+Keyboard modes require special handling:
+
+```cpp
+void loop() {
+    backend.ScanInputs();
+
+    // Check if current mode is a keyboard mode
+    if (KeyboardMode *kb_mode = dynamic_cast<KeyboardMode*>(backend.CurrentGameMode())) {
+        // Keyboard mode: send keyboard HID report
+        kb_mode->SendReport(backend.GetInputs());
+    } else {
+        // Controller mode: send controller HID report
+        backend.UpdateOutputs();
+        backend.SendReport();
+    }
+}
+```
+
+### Mode Switching
+
+```cpp
+Melee20Button melee_mode;
+Ultimate ultimate_mode;
+DefaultKeyboardMode keyboard_mode;
+
+void loop() {
+    backend.ScanInputs();
+
+    // Check for mode switch buttons
+    if (backend.GetInputs().mb1 && backend.GetInputs().mb2) {
+        backend.SetGameMode(&melee_mode);
+    } else if (backend.GetInputs().mb2 && backend.GetInputs().mb3) {
+        backend.SetGameMode(&ultimate_mode);
+    } else if (backend.GetInputs().mb1 && backend.GetInputs().mb3) {
+        backend.SetGameMode(&keyboard_mode);
+    }
+
+    // Process and send
+    if (KeyboardMode *kb = dynamic_cast<KeyboardMode*>(backend.CurrentGameMode())) {
+        kb->SendReport(backend.GetInputs());
+    } else {
+        backend.UpdateOutputs();
+        backend.SendReport();
+    }
+}
+```
+
+### Performance Optimization with Selective Scanning
+
+```cpp
+void loop() {
+    // Scan critical button inputs every iteration (1ms intervals)
+    backend.ScanInputs(InputScanSpeed::FAST);
+
+    // Process and send outputs
+    backend.UpdateOutputs();
+    backend.SendReport();
+
+    // Scan less critical inputs every 100ms
+    static uint32_t last_slow_scan = 0;
+    if (millis() - last_slow_scan >= 100) {
+        backend.ScanInputs(InputScanSpeed::MEDIUM);
+        backend.ScanInputs(InputScanSpeed::SLOW);
+        last_slow_scan = millis();
+    }
+}
+```
+
+## Implementing a Custom Backend
+
+```cpp
+class CustomBackend : public CommunicationBackend {
+  public:
+    CustomBackend(
+        InputState &inputs,
+        InputSource **input_sources,
+        size_t input_source_count
+    ) : CommunicationBackend(inputs, input_sources, input_source_count) {
+        // Initialize custom hardware/protocol
+    }
+
+    CommunicationBackendId BackendId() override {
+        return COMMS_BACKEND_CUSTOM;
+    }
+
+    void SendReport() override {
+        // Format output state into custom protocol
+        uint8_t report[64];
+        
+        // Map buttons
+        report[0] = (_outputs.a ? 0x01 : 0) |
+                    (_outputs.b ? 0x02 : 0) |
+                    (_outputs.x ? 0x04 : 0) |
+                    (_outputs.y ? 0x08 : 0);
+        
+        // Map analog sticks
+        report[1] = _outputs.leftStickX;
+        report[2] = _outputs.leftStickY;
+        report[3] = _outputs.rightStickX;
+        report[4] = _outputs.rightStickY;
+        
+        // Send via custom protocol
+        sendCustomReport(report, sizeof(report));
+    }
+
+  private:
+    void sendCustomReport(uint8_t *data, size_t length) {
+        // Hardware-specific transmission code
+    }
+};
+```
+
+## Best Practices
+
+<Warning>
+  Never call `UpdateOutputs()` more frequently than you call `ScanInputs()`. This can result in stale output reports being sent to the host.
+</Warning>
+
+<Note>
+  For optimal latency, keep the main loop execution time under 1ms. Profile your code to ensure `ScanInputs()`, `UpdateOutputs()`, and `SendReport()` complete quickly.
+</Note>
+
+<Note>
+  Always check if a game mode is set before attempting to access it. The backend initializes with `_gamemode = nullptr`.
+</Note>
+
+## Data Flow
+
+The typical data flow through a communication backend:
+
+```
+┌─────────────────┐
+│  Input Sources  │  Physical buttons, switches, controllers
+└────────┬────────┘
+         │
+         ↓ ScanInputs()
+┌─────────────────┐
+│   InputState    │  Unified button state (lf1, rf2, etc.)
+└────────┬────────┘
+         │
+         ↓ UpdateOutputs()
+┌─────────────────┐
+│   Game Mode     │  Melee20Button, Ultimate, etc.
+│  (InputMode)    │  - Button remapping
+└────────┬────────┘  - SOCD resolution
+         │           - Mode-specific logic
+         ↓
+┌─────────────────┐
+│  OutputState    │  Controller outputs (A, B, sticks, etc.)
+└────────┬────────┘
+         │
+         ↓ SendReport()
+┌─────────────────┐
+│  USB HID Report │  Sent to host device
+└─────────────────┘
+```
+
+## Related Classes
+
+- [InputSource](/api/input-source) - For reading physical inputs
+- [ControllerMode](/api/controller-mode) - For processing inputs into controller outputs
+- [KeyboardMode](/api/keyboard-mode) - For processing inputs into keyboard outputs
+
+## See Also
+
+- [Creating Controller Modes](/customization/controller-modes) - Guide to implementing custom game modes
+- [SOCD Configuration](/customization/socd) - Configuring button mappings and SOCD

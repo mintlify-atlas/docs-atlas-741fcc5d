@@ -1,0 +1,83 @@
+---
+title: "Introduction"
+description: "Modular cross-platform firmware for digital and mixed analog/digital game controllers"
+---
+
+<img
+  className="block dark:hidden"
+  src="https://media.brand.dev/aa64d125-8623-491c-8a71-b47c0f4befb5.png"
+  alt="HayBox Logo"
+/>
+<img
+  className="hidden dark:block"
+  src="https://media.brand.dev/aa64d125-8623-491c-8a71-b47c0f4befb5.png"
+  alt="HayBox Logo"
+/>
+
+# Welcome to HayBox
+
+HayBox is a modular, cross-platform firmware designed for digital or mixed analog/digital controllers, primarily targeted at B0XX-style controllers. Built with flexibility and performance in mind, HayBox supports multiple microcontrollers, communication backends, and game modes.
+
+## Why HayBox?
+
+<CardGroup cols={2}>
+  <Card title="Cross-Platform Support" icon="microchip">
+    Works on RP2040 (Raspberry Pi Pico) and AVR microcontrollers (Arduino-based boards)
+  </Card>
+  <Card title="Multiple Backends" icon="plug">
+    Supports XInput, DInput, GameCube, Nintendo 64, and Nintendo Switch protocols
+  </Card>
+  <Card title="Game-Ready Modes" icon="gamepad">
+    Pre-built modes for Melee, Project M, Ultimate, FGC games, and more
+  </Card>
+  <Card title="Fully Customizable" icon="sliders">
+    Create custom input modes, configure SOCD cleaning, and mix input sources
+  </Card>
+</CardGroup>
+
+## Key Features
+
+- **Cross-platform support**: RP2040 (e.g. Raspberry Pi Pico) and 16MHz AVR MCUs (e.g. ATMega32U4)
+- **Wide controller compatibility**: B0XX, LBX, Smash Box, GCCPCB/Model S, and more
+- **Multiple communication backends**: XInput, DInput, GameCube, N64, Switch, B0XX input viewer
+- **Mixed input sources**: GPIO buttons, switch matrix, Wii Nunchuk, GameCube controller
+- **Up-to-date Melee mode**: Compliant with B0XX V3 specifications
+- **Existing game modes**: Melee, Project M, Ultimate, Rivals of Aether, FGC, and more
+- **Customizable SOCD cleaning**: Configure button pairs and resolution methods per mode
+- **Mode switching**: Switch modes on the fly without unplugging
+- **Automatic detection**: Detects console vs USB automatically
+- **Low latency**: Optimized polling rates for console and PC use
+
+## Getting Started
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Flash pre-built firmware to your controller
+  </Card>
+  <Card title="Building from Source" icon="code" href="/building-from-source">
+    Customize and build your own firmware
+  </Card>
+  <Card title="Button Holds" icon="hand" href="/usage/button-holds">
+    Learn the default button combinations
+  </Card>
+  <Card title="Game Modes" icon="gamepad" href="/usage/game-modes">
+    Explore available game modes
+  </Card>
+</CardGroup>
+
+## Community and Support
+
+<CardGroup cols={2}>
+  <Card title="GitHub Repository" icon="github" href="https://github.com/jonnyhaystack/haybox">
+    View source code and contribute
+  </Card>
+  <Card title="Report Issues" icon="bug" href="https://github.com/jonnyhaystack/haybox/issues">
+    Report bugs and request features
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/troubleshooting">
+    Find solutions to common problems
+  </Card>
+  <Card title="Contributing" icon="users" href="https://github.com/jonnyhaystack/haybox#contributing">
+    Join the community
+  </Card>
+</CardGroup>

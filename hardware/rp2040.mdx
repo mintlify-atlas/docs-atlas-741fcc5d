@@ -1,0 +1,364 @@
+---
+title: RP2040 Support
+description: Raspberry Pi Pico and RP2040-based controller support in HayBox
+---
+
+The RP2040 is a powerful dual-core microcontroller from Raspberry Pi that offers significant advantages for game controller applications. HayBox has extensive support for RP2040-based boards, with optimizations that take full advantage of the hardware.
+
+## Why Choose RP2040?
+
+RP2040-based controllers offer substantial benefits over traditional AVR microcontrollers:
+
+<CardGroup cols={2}>
+  <Card title="Superior Performance" icon="gauge-high">
+    - 133-200 MHz dual-core ARM Cortex-M0+
+    - ~0.5ms input latency (vs ~1-2ms on AVR)
+    - Dedicated core for button scanning
+  </Card>
+  
+  <Card title="More Memory" icon="memory">
+    - 264 KB RAM (vs 2.5 KB on ATMega32U4)
+    - 2 MB Flash (vs 32 KB)
+    - Room for complex features and configs
+  </Card>
+  
+  <Card title="Advanced Features" icon="star">
+    - OLED display support
+    - RGB LED support (FastLED)
+    - Configuration persistence in flash
+    - Mode selection without recompiling
+  </Card>
+  
+  <Card title="Hardware Acceleration" icon="microchip">
+    - PIO state machines for GameCube/N64
+    - Hardware PWM for LEDs
+    - DMA for efficient data transfer
+  </Card>
+</CardGroup>
+
+## Supported Boards
+
+HayBox supports any RP2040-based board, with specific configs for popular options:
+
+### Raspberry Pi Pico
+
+- **Recommended for**: Prototyping and custom builds
+- **Price**: ~$4 USD
+- **GPIO Pins**: 26 usable pins
+- **Features**: Built-in LED, BOOTSEL button, USB-C (newer models)
+
+### Pico W
+
+- **Same as Pico** but with wireless capability (not currently used by HayBox)
+- GPIO 23-25 reserved for wireless module
+
+### Controllers Using RP2040
+
+- **B0XX R4** - Latest B0XX revision
+- **HTangl V1** - Custom GameCube PCB
+- **C53** - Compact rectangle controller
+- **Schism** - Advanced rectangle design
+
+## Dual-Core Processing
+
+One of RP2040's most powerful features is its dual-core architecture. HayBox leverages both cores for optimal performance:
+
+### Core 0 (Main Loop)
+
+```cpp
+void setup() {
+    // Initialize communication backends
+    backend_count = initialize_backends(
+        backends, inputs, input_sources, 
+        input_source_count, config, pinout
+    );
+    
+    // Setup mode activation bindings
+    setup_mode_activation_bindings(
+        config.game_mode_configs, 
+        config.game_mode_configs_count
+    );
+}
+
+void loop() {
+    // Mode selection logic
+    select_mode(backends, backend_count, config);
+    
+    // Send reports to USB/console
+    for (size_t i = 0; i < backend_count; i++) {
+        backends[i]->SendReport();
+    }
+    
+    // Handle keyboard mode if active
+    if (current_kb_mode != nullptr) {
+        current_kb_mode->SendReport(backends[0]->GetInputs());
+    }
+}
+```
+
+### Core 1 (Input Scanning)
+
+```cpp
+void setup1() {
+    // Wait for backend initialization
+    while (backends == nullptr) {
+        tight_loop_contents();
+    }
+}
+
+void loop1() {
+    // Continuously scan button inputs
+    if (backends != nullptr) {
+        gpio_input.UpdateInputs(backends[0]->GetInputs());
+    }
+}
+```
+
+<Note>
+By dedicating Core 1 to button scanning, HayBox achieves consistent, low-latency input processing without interfering with USB communication or game mode logic.
+</Note>
+
+## PIO (Programmable I/O)
+
+The RP2040's PIO state machines enable hardware-accelerated communication protocols:
+
+### GameCube Joybus Protocol
+
+HayBox uses the [joybus-pio](https://github.com/JonnyHaystack/joybus-pio) library for bit-perfect GameCube communication:
+
+```cpp
+const Pinout pinout = {
+    .joybus_data = 28,  // Any GPIO pin can be used
+    // ...
+};
+```
+
+**Benefits:**
+- Microsecond-accurate timing
+- No CPU overhead during communication
+- Supports overclocked polling rates
+- More reliable than bit-banging on AVR
+
+### Nintendo 64 Support
+
+N64 protocol is also handled by PIO, with the same benefits as GameCube support.
+
+## Building for RP2040
+
+HayBox uses the Arduino-Pico framework with optimized build settings.
+
+### PlatformIO Configuration
+
+From `platformio.ini`:
+
+```ini
+[arduino_pico_base]
+platform = https://github.com/maxgerhardt/platform-raspberrypi.git
+framework = arduino
+board = pico
+board_build.core = earlephilhower
+board_build.f_cpu = 200000000L  # 200 MHz overclock
+board_build.filesystem_size = 0.5m
+
+build_flags =
+    -O3  # Maximum optimization
+    -D USE_TINYUSB
+    -D CFG_TUSB_CONFIG_FILE="tusb_config_pico.h"
+    -I HAL/pico/include
+
+lib_deps =
+    # Joybus PIO library
+    https://github.com/JonnyHaystack/joybus-pio/archive/refs/tags/v1.2.3.zip
+    # TinyUSB for XInput support
+    https://github.com/JonnyHaystack/Adafruit_TinyUSB_XInput
+    # FastLED for RGB
+    https://github.com/FastLED/FastLED
+    # Display support
+    adafruit/Adafruit SSD1306@^2.5.9
+    adafruit/Adafruit GFX Library@^1.11.9
+```
+
+### Compiling a Pico Config
+
+<Tabs>
+  <Tab title="PlatformIO IDE">
+    1. Open the HayBox project in VS Code with PlatformIO
+    2. Select your environment (e.g., `pico`, `b0xx_r4`) from the bottom toolbar
+    3. Click the Build button (checkmark icon)
+    4. Output will be in `.pio/build/[env_name]/firmware.uf2`
+  </Tab>
+  
+  <Tab title="Command Line">
+    ```bash
+    # Build for generic Pico
+    pio run -e pico
+    
+    # Build for B0XX R4
+    pio run -e b0xx_r4
+    
+    # Build all RP2040 environments
+    pio run -e pico -e b0xx_r4 -e htangl_v1 -e c53 -e schism
+    ```
+  </Tab>
+</Tabs>
+
+## Flashing Firmware
+
+Flashing RP2040 boards is extremely simple:
+
+### First-Time Flashing
+
+1. **Enter BOOTSEL mode**:
+   - Hold the BOOTSEL button on the Pico
+   - Plug in the USB cable
+   - Release BOOTSEL
+   
+2. **Pico appears as USB drive** named "RPI-RP2"
+
+3. **Drag and drop** the `.uf2` file onto the drive
+
+4. **Pico automatically reboots** with new firmware
+
+### Subsequent Updates
+
+HayBox includes a bootloader entry feature:
+
+```cpp
+// In setup() - check for bootloader button hold
+if (inputs.rt2) {
+    reboot_bootloader();  // Re-enter BOOTSEL mode
+}
+```
+
+**To reflash:**
+1. Hold the designated button (default: RT2)
+2. Plug in the controller
+3. Pico enters BOOTSEL mode automatically
+4. Drag and drop new `.uf2` file
+
+<Warning>
+On most configs, RT2 (right thumb button 2) is the bootloader button. Holding this during plugin allows easy reflashing without opening the controller.
+</Warning>
+
+## RP2040-Specific Features
+
+### Configuration Storage
+
+RP2040 boards can store configuration in flash memory:
+
+```cpp
+#include "core/Persistence.hpp"
+
+// In setup()
+if (!persistence.LoadConfig(config)) {
+    // No valid config found, save default
+    persistence.SaveConfig(config);
+}
+```
+
+This allows changing game modes, SOCD settings, and more without recompiling firmware.
+
+### OLED Display Support
+
+RP2040 has enough resources for a status display:
+
+```cpp
+lib_deps =
+    adafruit/Adafruit SSD1306@^2.5.9
+    adafruit/Adafruit GFX Library@^1.11.9
+```
+
+Displays can show:
+- Current game mode
+- Active modifiers
+- Button presses
+- Configuration status
+
+### RGB LED Support
+
+FastLED library enables addressable LED strips:
+
+```cpp
+lib_deps =
+    https://github.com/FastLED/FastLED
+```
+
+Use for:
+- Mode indicators
+- Per-button backlighting
+- Visual feedback
+- Aesthetic effects
+
+## Performance Characteristics
+
+### Input Latency
+
+| Measurement Point | Latency |
+|-------------------|----------|
+| Button debounce | ~1ms (configurable) |
+| Core 1 scan rate | ~0.1ms per scan |
+| USB report rate | 1ms (1000 Hz) |
+| **Total USB latency** | **~0.5-1ms** |
+| GameCube polling | 0.25ms per poll |
+| **Total GCC latency** | **~0.5-1.5ms** |
+
+### Comparison to AVR
+
+| Feature | RP2040 | AVR (ATMega32U4) |
+|---------|--------|------------------|
+| Input latency | 0.5-1ms | 1-2ms |
+| USB polling | 1000 Hz | 1000 Hz |
+| CPU overhead | Less than 5% (dual-core) | ~20-30% |
+| Console timing | PIO-accurate | Bit-bang (less reliable) |
+| Max buttons | 26+ | ~20 |
+
+## Troubleshooting
+
+### Pico Won't Enter BOOTSEL Mode
+
+- Try different USB cable (some are charge-only)
+- Hold BOOTSEL before plugging in
+- Try different USB port
+- Check for hardware damage
+
+### Firmware Not Working After Flash
+
+- Verify you downloaded the correct `.uf2` for your hardware
+- Check button mappings match your PCB
+- Test with USB gamepad tester
+- Rebuild with debug output enabled
+
+### High Latency on RP2040
+
+- Ensure dual-core code is implemented (`setup1()`/`loop1()`)
+- Check for long-running code in main loop
+- Verify USB polling rate (should be 1000 Hz)
+- Disable unnecessary features (display, RGB) for testing
+
+### Buttons Not Responding
+
+- Verify GPIO pin assignments in config
+- Check for pin conflicts (see [Pinouts](/hardware/pinouts))
+- Test continuity from button to GPIO pin
+- Ensure pull-up resistors are configured (internal pull-ups are enabled by default)
+
+## Advanced: Overclocking
+
+RP2040 can be overclocked for even better performance:
+
+```ini
+board_build.f_cpu = 200000000L  # 200 MHz (safe)
+# board_build.f_cpu = 250000000L  # 250 MHz (advanced)
+# board_build.f_cpu = 300000000L  # 300 MHz (requires testing)
+```
+
+<Warning>
+Overclocking beyond 200 MHz may cause instability and is not recommended unless you thoroughly test your specific hardware.
+</Warning>
+
+## Resources
+
+- [RP2040 Datasheet](https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf)
+- [Raspberry Pi Pico Pinout](https://datasheets.raspberrypi.com/pico/Pico-R3-A4-Pinout.pdf)
+- [Arduino-Pico Documentation](https://arduino-pico.readthedocs.io/)
+- [joybus-pio Library](https://github.com/JonnyHaystack/joybus-pio)

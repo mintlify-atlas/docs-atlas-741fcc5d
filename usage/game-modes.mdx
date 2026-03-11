@@ -1,0 +1,349 @@
+---
+title: Game Modes
+description: Available controller modes and how to switch between them on the fly
+icon: gamepad-modern
+---
+
+HayBox includes multiple game modes optimized for different games and use cases. Unlike other firmwares, you can switch between modes on the fly without unplugging your controller.
+
+## Available Game Modes
+
+### Melee Mode
+
+<Info>
+Up to date with B0XX V3 specifications
+</Info>
+
+**Game:** Super Smash Bros. Melee
+
+**SOCD:** 2IP (No Reactivation) for all directional pairs
+
+**Button Combination:** MB1 + LT1 + LF4 (Start + Mod X + L)
+
+**Features:**
+- Full B0XX V3 specification compliance
+- 20-button layout support (with Melee20Button)
+- 18-button layout support (with Melee18Button)
+- Automatic coordinate calculations for techniques
+- Ledgedash optimization
+- Shield drop angles
+
+**Configuration Options:**
+```cpp
+// From config_defaults.hpp
+GameModeConfig {
+    .mode_id = MODE_MELEE,
+    .socd_pairs_count = 4,
+    .socd_pairs = {
+        SocdPair { BTN_LF3, BTN_LF1, SOCD_2IP_NO_REAC }, // Left/Right
+        SocdPair { BTN_LF2, BTN_RF4, SOCD_2IP_NO_REAC }, // Down/Up
+        SocdPair { BTN_RT3, BTN_RT5, SOCD_2IP_NO_REAC }, // C-Left/C-Right
+        SocdPair { BTN_RT2, BTN_RT4, SOCD_2IP_NO_REAC }, // C-Down/C-Up
+    },
+    .activation_binding = { BTN_LT1, BTN_MB1, BTN_LF4 },
+}
+```
+
+**Special Features:**
+- Down + Back → Automatic jab-cancel coordinates (default)
+- Crouch walk option select (configurable)
+- Mod X lightshield
+- L/R analog triggers
+
+### Project M / Project+ Mode
+
+**Game:** Project M / Project+
+
+**SOCD:** 2IP (No Reactivation)
+
+**Button Combination:** MB1 + LT1 + LF3 (Start + Mod X + Left)
+
+**Features:**
+- Based on Melee mode with P+ specific adjustments
+- Optional true Z press support
+- Ledgedash trajectory optimization
+- Compatible with both PM and P+ physics
+
+**Configuration Options:**
+```cpp
+MeleeOptions project_m_options = {
+    .true_z_press = true,  // Send real Z instead of LS+A macro
+    .disable_ledgedash_socd_override = false
+};
+```
+
+<Note>
+**Z Press Behavior:** By default, Z sends lightshield + A (like Melee). Set `true_z_press = true` to send actual Z input for tether/grab items. You can always press Mod X + Z for true Z press.
+</Note>
+
+**Activation:**
+```cpp
+.activation_binding = { BTN_LT1, BTN_MB1, BTN_LF3 }
+```
+
+### Ultimate Mode
+
+**Game:** Super Smash Bros. Ultimate
+
+**SOCD:** 2IP (With Reactivation)
+
+**Button Combination:** MB1 + LT1 + LF2 (Start + Mod X + Down)
+
+**Features:**
+- Optimized for Ultimate physics and mechanics
+- 2IP with reactivation for modern gameplay
+- Full c-stick support
+- All Ultimate-specific techniques
+
+**Configuration:**
+```cpp
+GameModeConfig {
+    .mode_id = MODE_ULTIMATE,
+    .socd_pairs = {
+        SocdPair { BTN_LF3, BTN_LF1, SOCD_2IP }, // With reactivation
+        SocdPair { BTN_LF2, BTN_RF4, SOCD_2IP },
+        SocdPair { BTN_RT3, BTN_RT5, SOCD_2IP },
+        SocdPair { BTN_RT2, BTN_RT4, SOCD_2IP },
+    },
+    .activation_binding = { BTN_LT1, BTN_MB1, BTN_LF2 },
+}
+```
+
+<Info>
+When using Nintendo Switch backend (hold RF2/X on plugin), Ultimate mode is automatically selected as the default.
+</Info>
+
+### FGC Mode
+
+**Game:** Traditional Fighting Games (Street Fighter, Tekken, etc.)
+
+**SOCD:** Neutral
+
+**Button Combination:** MB1 + LT1 + LF1 (Start + Mod X + Right)
+
+**Layout:** Hitbox-style fighting game layout
+
+**Features:**
+- Neutral SOCD (left + right = neutral)
+- Optimized button layout for 6-button fighters
+- Jump button on thumb
+- Separate SOCD for up/down (also neutral)
+
+**Configuration:**
+```cpp
+GameModeConfig {
+    .mode_id = MODE_FGC,
+    .socd_pairs = {
+        SocdPair { BTN_LF3, BTN_LF1, SOCD_NEUTRAL }, // Left/Right
+        SocdPair { BTN_LF2, BTN_LT1, SOCD_NEUTRAL }, // Down/Up
+    },
+    .button_remapping = {
+        ButtonRemap { BTN_RT4, BTN_LT1 }, // Remap for jump
+    },
+    .activation_binding = { BTN_LT1, BTN_MB1, BTN_LF1 },
+}
+```
+
+### Rivals of Aether Mode
+
+**Game:** Rivals of Aether (1)
+
+**SOCD:** 2IP (No Reactivation)
+
+**Button Combination:** MB1 + LT1 + RF1 (Start + Mod X + B)
+
+**Features:**
+- Optimized for Rivals 1 mechanics
+- Similar to Melee mode with Rivals-specific adjustments
+- Full parry and strong attack support
+
+**Activation:**
+```cpp
+.activation_binding = { BTN_LT1, BTN_MB1, BTN_RF1 }
+```
+
+### Rivals of Aether 2 Mode
+
+**Game:** Rivals of Aether 2
+
+**SOCD:** 2IP (No Reactivation)
+
+**Button Combination:** MB1 + LT1 + RF5 (Start + Mod X + R)
+
+**Features:**
+- Optimized for Rivals 2 mechanics and updates
+- Enhanced input handling for new movement options
+
+**Activation:**
+```cpp
+.activation_binding = { BTN_LT1, BTN_MB1, BTN_RF5 }
+```
+
+### Keyboard Mode
+
+<Warning>
+Keyboard modes only work with the DInput backend. On Pico, you must hold Z on plugin to force DInput mode.
+</Warning>
+
+**Use Case:** Games without gamepad support
+
+**Button Combination:** MB1 + LT2 + LF4 (Start + Mod Y + L)
+
+**Features:**
+- Standard keyboard emulation
+- Customizable key mappings
+- Works with any keyboard-compatible game
+- Multiple keyboard mode configs supported
+
+**Default Key Mapping:**
+```cpp
+KeyboardModeConfig {
+    .button_count = 22,
+    .button_mappings = {
+        { BTN_LF4, HID_KEY_A },
+        { BTN_LF3, HID_KEY_B },
+        { BTN_LF2, HID_KEY_C },
+        { BTN_LF1, HID_KEY_D },
+        { BTN_LT1, HID_KEY_E },
+        // ... etc
+    }
+}
+```
+
+**Activation:**
+```cpp
+.activation_binding = { BTN_LT2, BTN_MB1, BTN_LF4 }
+```
+
+## Mode Switching
+
+<Steps>
+  <Step title="Hold the button combination">
+    Press and hold all three buttons for your desired mode (e.g., Start + Mod X + L for Melee).
+  </Step>
+  
+  <Step title="Mode activates immediately">
+    The controller switches to the new mode without requiring an unplug.
+  </Step>
+  
+  <Step title="Release buttons">
+    Release the button combination and continue playing in the new mode.
+  </Step>
+</Steps>
+
+<Note>
+Mode switching is primarily useful on PC where you can switch games without restarting. On console, you typically need to restart the console anyway to change games.
+</Note>
+
+## Mode Selection Code
+
+The mode selection logic runs continuously in the main loop:
+
+```cpp
+void select_mode(CommunicationBackend **backends, size_t backends_count, Config &config) {
+    InputState &inputs = backends[0]->GetInputs();
+
+    for (size_t i = 0; i < config.game_mode_configs_count; i++) {
+        GameModeConfig &mode_config = config.game_mode_configs[i];
+        if (all_buttons_held(inputs.buttons, mode_activation_masks[i]) && 
+            i != current_mode_index) {
+            current_mode_index = i;
+            for (size_t i = 0; i < backends_count; i++) {
+                set_mode(backends[i], mode_config, config);
+            }
+            return;
+        }
+    }
+}
+```
+
+## SOCD Types Explained
+
+<Tabs>
+  <Tab title="2IP No Reactivation">
+    **Second Input Priority without Reactivation**
+
+    - Left → Left + Right = Right
+    - Right → Right + Left = Left
+    - Releasing second direction = Neutral (must physically press first again)
+
+    **Used in:** Melee, Project M, Rivals
+  </Tab>
+  
+  <Tab title="2IP With Reactivation">
+    **Second Input Priority with Reactivation**
+
+    - Left → Left + Right = Right
+    - Right → Right + Left = Left  
+    - Releasing second direction = First direction reactivates
+
+    **Used in:** Ultimate
+  </Tab>
+  
+  <Tab title="Neutral">
+    **Neutral SOCD**
+
+    - Left + Right = Neutral (no direction)
+    - Down + Up = Neutral (no direction)
+
+    **Used in:** FGC Mode (traditional fighting games)
+  </Tab>
+</Tabs>
+
+## Custom Modes
+
+You can create custom controller modes for other games:
+
+<Steps>
+  <Step title="Create mode class">
+    Implement `UpdateDigitalOutputs()` and `UpdateAnalogOutputs()` methods.
+  </Step>
+  
+  <Step title="Add to mode selection">
+    Add your mode to `mode_selection.cpp` and assign a button combination.
+  </Step>
+  
+  <Step title="Configure SOCD">
+    Set up SOCD pairs and types for your mode's requirements.
+  </Step>
+  
+  <Step title="Build and flash">
+    Compile and flash the firmware with your custom mode included.
+  </Step>
+</Steps>
+
+See the [customization guide](/customization) for detailed instructions on creating custom modes.
+
+## Mode Persistence
+
+<Info>
+The selected mode is retained until you explicitly switch to a different mode or power cycle the controller.
+</Info>
+
+- **On plugin:** Uses default mode for selected backend
+- **During use:** Switches when button combination detected
+- **On power cycle:** Returns to default mode for backend
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Mode won't switch">
+    Make sure you're holding all three buttons simultaneously. The mode will only switch if all activation buttons are pressed at the same time.
+  </Accordion>
+
+  <Accordion title="Wrong default mode on plugin">
+    Each communication backend has a default mode. To change it, edit the `default_mode_config` in your `config_defaults.hpp`:
+    ```cpp
+    CommunicationBackendConfig {
+        .backend_id = COMMS_BACKEND_XINPUT,
+        .default_mode_config = 1, // 1 = Melee, 3 = Ultimate, etc.
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Keyboard mode not activating">
+    Keyboard modes require DInput backend. On Pico:
+    1. Hold Z on plugin to force DInput
+    2. Then try the keyboard mode activation combination
+  </Accordion>
+</AccordionGroup>

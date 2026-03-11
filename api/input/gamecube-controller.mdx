@@ -1,0 +1,446 @@
+---
+title: 'GamecubeControllerInput'
+description: 'Input source for reading Nintendo GameCube controller data via the GameCube controller protocol'
+---
+
+## Overview
+
+`GamecubeControllerInput` enables reading analog stick and button data from a Nintendo GameCube controller using the Joybus protocol. This provides authentic GameCube controller input with analog sticks and analog shoulder triggers.
+
+<Warning>
+  This input source is only available on the **Raspberry Pi Pico (RP2040)** platform. It requires PIO (Programmable I/O) hardware for precise timing control.
+</Warning>
+
+## Class Declaration
+
+```cpp
+class GamecubeControllerInput : public InputSource {
+  public:
+    GamecubeControllerInput(
+        uint data_pin,
+        uint polling_rate,
+        PIO pio = pio0,
+        int sm = -1,
+        int offset = -1
+    );
+    ~GamecubeControllerInput();
+    InputScanSpeed ScanSpeed();
+    void UpdateInputs(InputState &inputs);
+    int GetOffset();
+};
+```
+
+## Constructor
+
+```cpp
+GamecubeControllerInput(
+    uint data_pin,
+    uint polling_rate,
+    PIO pio = pio0,
+    int sm = -1,
+    int offset = -1
+)
+```
+
+<ParamField path="data_pin" type="uint" required>
+  GPIO pin number for the GameCube controller data line. This single pin handles bidirectional communication using the Joybus protocol.
+</ParamField>
+
+<ParamField path="polling_rate" type="uint" required>
+  Polling rate in Hz (polls per second). Common values:
+  - `125` - Standard polling rate (8ms intervals)
+  - `250` - Higher responsiveness
+  - `500` - Very high responsiveness
+  - `1000` - Maximum responsiveness
+  
+  Higher rates provide lower latency but consume more CPU time.
+</ParamField>
+
+<ParamField path="pio" type="PIO" default="pio0">
+  PIO hardware block to use (`pio0` or `pio1`). The RP2040 has two independent PIO blocks, each with 4 state machines. Use `pio1` if `pio0` is already in use by other peripherals.
+</ParamField>
+
+<ParamField path="sm" type="int" default="-1">
+  PIO state machine number to use (0-3). Set to `-1` for automatic allocation of an available state machine. Manual selection is useful when managing multiple PIO programs.
+</ParamField>
+
+<ParamField path="offset" type="int" default="-1">
+  PIO instruction memory offset for loading the Joybus program. Set to `-1` for automatic allocation. Manual control is useful when coordinating multiple PIO programs to avoid memory conflicts.
+</ParamField>
+
+<Note>
+  In most cases, use the default values for `pio`, `sm`, and `offset` to let the firmware automatically manage PIO resources.
+</Note>
+
+## Methods
+
+### ScanSpeed()
+
+Returns `InputScanSpeed::SLOW`, indicating this input source is polled according to its configured polling rate.
+
+```cpp
+InputScanSpeed ScanSpeed();
+```
+
+<ResponseField name="return" type="InputScanSpeed">
+  Always returns `InputScanSpeed::SLOW`
+</ResponseField>
+
+### UpdateInputs()
+
+Attempts to poll the GameCube controller and updates the input state if new data is received.
+
+```cpp
+void UpdateInputs(InputState &inputs);
+```
+
+<ParamField path="inputs" type="InputState&" required>
+  Reference to the `InputState` structure to update with controller data.
+</ParamField>
+
+#### Input State Fields Updated
+
+When a GameCube controller responds to the poll:
+
+```cpp
+inputs.nunchuk_connected = true;  // Indicates controller is responding
+inputs.nunchuk_x = <value>;       // Stick X position (-128 to 127)
+inputs.nunchuk_y = <value>;       // Stick Y position (-128 to 127)
+inputs.nunchuk_z = <pressed>;     // L shoulder trigger (digital)
+```
+
+<Note>
+  The GameCube controller data is mapped to the same fields as Nunchuk input for compatibility with existing game modes. The Z field represents the L shoulder trigger digital press.
+</Note>
+
+### GetOffset()
+
+Returns the PIO instruction memory offset used by this input source.
+
+```cpp
+int GetOffset();
+```
+
+<ResponseField name="return" type="int">
+  The PIO instruction memory offset where the Joybus protocol program is loaded.
+</ResponseField>
+
+This is useful when you need to coordinate PIO memory usage across multiple peripherals or when debugging PIO program conflicts.
+
+## Configuration Example
+
+### Basic GameCube Controller Input
+
+```cpp config.cpp
+#include "input/GamecubeControllerInput.hpp"
+#include "core/state.hpp"
+
+const Pinout pinout = {
+    .joybus_data = 28,  // GameCube controller data pin
+    .mux = -1,
+};
+
+// Create GameCube controller input at 125Hz polling
+static GamecubeControllerInput gc_input(
+    pinout.joybus_data,
+    125  // 125Hz polling rate
+);
+
+void setup() {
+    static InputState inputs;
+    
+    // Create input sources array
+    static InputSource *input_sources[] = { &gc_input };
+    size_t input_source_count = sizeof(input_sources) / sizeof(InputSource *);
+    
+    // Initialize backends with GameCube input
+    backend_count = initialize_backends(
+        backends,
+        inputs,
+        input_sources,
+        input_source_count,
+        config,
+        pinout
+    );
+}
+```
+
+### High-Performance Configuration
+
+```cpp config.cpp
+// High polling rate for competitive gaming
+static GamecubeControllerInput gc_input(
+    28,    // Data pin
+    1000,  // 1000Hz (1ms polling) for minimum latency
+    pio0,  // Use PIO0
+    0,     // Use state machine 0
+    -1     // Auto-allocate instruction memory
+);
+```
+
+### Combining with Button Inputs
+
+```cpp config.cpp
+#include "input/GpioButtonInput.hpp"
+#include "input/GamecubeControllerInput.hpp"
+
+const GpioButtonMapping button_mappings[] = {
+    { BTN_LF1, 0 },
+    { BTN_RF1, 1 },
+    // ... additional buttons
+};
+const size_t button_count = sizeof(button_mappings) / sizeof(GpioButtonMapping);
+
+static GpioButtonInput gpio_input(button_mappings, button_count);
+static GamecubeControllerInput gc_input(28, 250);
+
+void setup() {
+    static InputState inputs;
+    
+    // Use both input sources simultaneously
+    static InputSource *input_sources[] = {
+        &gpio_input,  // Read digital buttons
+        &gc_input     // Read GameCube controller
+    };
+    size_t input_source_count = sizeof(input_sources) / sizeof(InputSource *);
+    
+    backend_count = initialize_backends(
+        backends,
+        inputs,
+        input_sources,
+        input_source_count,
+        config,
+        pinout
+    );
+}
+```
+
+### Using Alternative PIO Block
+
+```cpp config.cpp
+// Use PIO1 if PIO0 is busy with other peripherals
+static GamecubeControllerInput gc_input(
+    28,     // Data pin
+    250,    // Polling rate
+    pio1,   // Use PIO1 instead of PIO0
+    -1,     // Auto-allocate state machine
+    -1      // Auto-allocate memory
+);
+```
+
+## Hardware Connection
+
+### GameCube Controller Cable Pinout
+
+GameCube controllers use a proprietary 6-pin connector:
+
+| Pin | Color | Signal | Description |
+|-----|-------|--------|-------------|
+| 1 | Yellow | 5V | Power supply (not used for input reading) |
+| 2 | Red | DATA | Bidirectional data line |
+| 3 | Green | GND | Ground |
+| 4 | White | GND | Ground |
+| 5 | N/C | - | Not connected |
+| 6 | Blue | 3.3V | Logic level (connect to 3.3V) |
+
+### Minimal Wiring
+
+For reading controller input only (not providing power to the controller):
+
+```
+GameCube Controller     Raspberry Pi Pico
+-------------------     -----------------
+Red (DATA)         ---> GP28 (or configured pin)
+Green/White (GND)  ---> GND
+Blue (3.3V)        ---> 3.3V
+```
+
+<Warning>
+  Do **NOT** connect the Yellow (5V) wire to the Pico's 3.3V pin. The 3.3V pin provides logic level reference for the data line. Power the controller separately if needed.
+</Warning>
+
+### Pull-up Resistor
+
+The data line requires a pull-up resistor:
+
+```
+DATA pin ----[1kΩ resistor]---- 3.3V
+```
+
+Many GameCube controller cables have this resistor built-in. If experiencing communication issues, verify the pull-up is present.
+
+## GameCube Controller Data
+
+### Analog Stick Mapping
+
+The main control stick provides 8-bit values:
+
+- **X Axis**: Left stick horizontal movement
+- **Y Axis**: Left stick vertical movement
+- **Range**: `-128` (minimum) to `+127` (maximum)
+- **Center**: Approximately `0` (controller calibration may vary)
+
+<Note>
+  GameCube controllers have both a main control stick and a C-stick. Currently, only the main control stick data is exposed through this input source.
+</Note>
+
+### Button Mapping
+
+The `nunchuk_z` field maps to the GameCube L shoulder trigger digital press:
+
+```cpp
+if (inputs.nunchuk_z) {
+    // L trigger is pressed past the digital activation point
+}
+```
+
+<Note>
+  Full GameCube button support (A, B, X, Y, D-pad, etc.) is available through the communication backend when using GameCube mode. This input source focuses on analog stick reading for hybrid controllers.
+</Note>
+
+## PIO Resource Management
+
+### Understanding PIO Blocks
+
+The RP2040 has two PIO blocks:
+
+- **PIO0** and **PIO1**: Each with 4 state machines (SM0-SM3)
+- **Instruction Memory**: 32 instructions per PIO block (shared)
+
+The GameCube controller protocol requires:
+
+- 1 state machine
+- ~16 instructions of memory
+
+### Resource Conflicts
+
+If you see PIO-related errors during compilation or runtime:
+
+1. **State Machine Exhaustion**: All 4 state machines in use
+   - Solution: Use the other PIO block (`pio1`)
+
+2. **Instruction Memory Full**: No space for the Joybus program
+   - Solution: Use the other PIO block or manually manage offsets
+
+3. **Offset Conflicts**: Programs overlap in instruction memory
+   - Solution: Manually specify offsets to avoid conflicts
+
+```cpp
+// Example: Managing multiple PIO programs
+static GamecubeControllerInput gc_input(28, 250, pio0, 0, 0);   // SM0, offset 0
+static SomeOtherPIODevice other_device(29, pio0, 1, 16);        // SM1, offset 16
+```
+
+## Polling Rate Guidelines
+
+| Rate | Interval | Use Case | CPU Impact |
+|------|----------|----------|------------|
+| 125Hz | 8ms | Standard, matches original GC adapter | Low |
+| 250Hz | 4ms | Improved responsiveness | Medium |
+| 500Hz | 2ms | High-performance gaming | High |
+| 1000Hz | 1ms | Competitive/professional use | Very High |
+
+<Note>
+  Higher polling rates provide lower latency but increase CPU usage. For most applications, 125-250Hz provides excellent responsiveness with minimal overhead.
+</Note>
+
+## Performance
+
+- **Scan Speed**: `SLOW` - polled at configured rate
+- **Update Rate**: 125-1000Hz (configurable)
+- **Latency**: 1-8ms depending on polling rate
+- **Protocol**: Nintendo Joybus (bit-banged via PIO)
+- **Timing Precision**: Sub-microsecond (PIO hardware timing)
+
+## Platform Requirements
+
+<Warning>
+  **Raspberry Pi Pico (RP2040) only**. This input source requires:
+  - PIO hardware for precise protocol timing
+  - GamecubeController library
+  - Pico SDK
+</Warning>
+
+### Not Available On:
+
+- Arduino (AVR) - No PIO hardware
+- STM32 - Different architecture
+- ESP32 - Incompatible peripheral set
+
+## Troubleshooting
+
+### Controller Not Detected
+
+**Symptoms**: `nunchuk_connected` remains `false`
+
+**Solutions**:
+- Verify data pin connection (Red wire)
+- Check ground connection (Green/White wires)
+- Confirm 3.3V connection on Blue wire
+- Test with a known-good GameCube controller
+- Verify pull-up resistor on data line
+
+### Erratic or Stuck Values
+
+**Symptoms**: Stick positions freeze or jump randomly
+
+**Solutions**:
+- Check for loose connections
+- Verify polling rate isn't too high for your setup
+- Test with lower polling rate (125Hz)
+- Check for electrical interference from nearby wires
+
+### PIO Initialization Failure
+
+**Symptoms**: Firmware won't start or crashes on init
+
+**Solutions**:
+- Try different PIO block (`pio1` instead of `pio0`)
+- Set `sm = -1` to auto-allocate state machine
+- Set `offset = -1` to auto-allocate memory
+- Check for conflicts with other PIO-based peripherals
+
+### High CPU Usage
+
+**Symptoms**: Other tasks running slowly
+
+**Solutions**:
+- Reduce polling rate to 125-250Hz
+- Use second core for input scanning (see Pico dual-core patterns)
+- Profile your firmware to identify bottlenecks
+
+## Advanced Usage
+
+### Checking PIO Allocation
+
+```cpp
+GamecubeControllerInput gc_input(28, 250);
+
+int allocated_offset = gc_input.GetOffset();
+printf("Joybus program loaded at PIO offset: %d\n", allocated_offset);
+```
+
+### Dual Controller Setup
+
+```cpp
+// Read two GameCube controllers simultaneously
+static GamecubeControllerInput gc_input1(28, 250, pio0);
+static GamecubeControllerInput gc_input2(27, 250, pio1);
+
+void setup() {
+    static InputSource *input_sources[] = { &gc_input1, &gc_input2 };
+    // ... initialize
+}
+```
+
+<Note>
+  Multiple GameCube controllers require separate PIO blocks or careful state machine management.
+</Note>
+
+## See Also
+
+- [NunchukInput](/api/input/nunchuk) - Alternative analog input source
+- [GamecubeBackend](/api/comms/gamecube) - GameCube communication backend
+- [GpioButtonInput](/api/input/gpio-button) - Digital button inputs
+- [Input Sources](/customization/input-sources) - Overview of all input source types
+- [PIO Programming](https://datasheets.raspberrypi.com/pico/raspberry-pi-pico-c-sdk.pdf) - RP2040 PIO documentation

@@ -1,0 +1,617 @@
+---
+title: Building from Source
+description: Compile and customize HayBox firmware for your controller
+---
+
+Building HayBox from source allows you to customize pin mappings, button functions, SOCD behavior, and create custom input modes for your specific controller setup.
+
+## Choose Your Build Method
+
+HayBox supports three main build methods:
+
+<CardGroup cols={3}>
+  <Card title="Local Build" icon="laptop">
+    Full control, fastest iteration. Requires installing dependencies.
+  </Card>
+  
+  <Card title="GitHub Codespaces" icon="cloud">
+    Cloud-based VS Code. No local setup needed. Free tier available.
+  </Card>
+  
+  <Card title="GitHub Actions" icon="robot">
+    Automated builds on push. No local setup, but slower iteration.
+  </Card>
+</CardGroup>
+
+## Building Locally
+
+Recommended for active development and customization.
+
+### Prerequisites
+
+<Steps>
+  <Step title="Install dependencies">
+    **Required:**
+    - [PlatformIO IDE for VSCode](https://platformio.org/install/ide?install=vscode)
+    
+    **Optional (for cloning repository):**
+    - [Git](https://git-scm.com/downloads) - Recommended for Pico builds and easier updates
+  </Step>
+
+  <Step title="Get the source code">
+    <CodeGroup>
+    ```bash Clone with Git (Recommended)
+    git clone https://github.com/JonnyHaystack/HayBox.git
+    cd HayBox
+    ```
+    
+    ```bash Download Release
+    # Download and extract from:
+    # https://github.com/JonnyHaystack/HayBox/releases/latest
+    ```
+    </CodeGroup>
+    
+    <Tip>
+      Cloning with Git makes it easy to pull updates later with `git pull`.
+    </Tip>
+  </Step>
+</Steps>
+
+### Build Process
+
+<Steps>
+  <Step title="Open project in VS Code">
+    1. Launch Visual Studio Code
+    2. Click **File → Open Folder**
+    3. Select the HayBox folder (containing `platformio.ini`)
+    
+    <Warning>
+      Make sure to open the folder containing `platformio.ini`, not the parent folder.
+    </Warning>
+  </Step>
+
+  <Step title="Configure long paths (Windows only - first time)">
+    On Windows, if this is your first time building HayBox, run this command in any terminal:
+    
+    <CodeGroup>
+    ```powershell PowerShell
+    git config --global core.longpaths true
+    ```
+    
+    ```bash Command Prompt
+    git config --global core.longpaths true
+    ```
+    </CodeGroup>
+    
+    This prevents path length issues when building for Pico/RP2040.
+  </Step>
+
+  <Step title="Select build environment">
+    Click the environment selector button in the bottom left of VS Code:
+    
+    ![Environment Selector](https://user-images.githubusercontent.com/1266473/187039372-485c5f0d-60b3-4534-befb-e713f138a7c8.png)
+    
+    Choose your controller's environment:
+    
+    **RP2040/Pico Environments:**
+    - `pico` - Generic Raspberry Pi Pico
+    - `b0xx_r4` - B0XX R4
+    - `c53` - Crane's Model C≤53
+    - `schism` - Schism controller
+    
+    **Arduino/AVR Environments:**
+    - `b0xx_r1` / `b0xx_r2` - B0XX R1/R2
+    - `arduino_leonardo` - Arduino Leonardo
+    - `arduino_micro` - Arduino Micro
+    - `arduino_nano` - Arduino Nano
+    - `gccpcb1` / `gccpcb2` - GCCPCB
+    - `lbx` - LBX
+    
+    ![Environment List](https://user-images.githubusercontent.com/1266473/187039585-cea18994-fd12-45fb-b43f-427eb7affb81.png)
+  </Step>
+
+  <Step title="Customize configuration (optional)">
+    Edit button mappings and pin assignments in your config file:
+    
+    ```
+    config/<environment>/config.cpp
+    ```
+    
+    <CodeGroup>
+    ```cpp Example: Custom Pin Mapping
+    GpioButtonMapping button_mappings[] = {
+        { BTN_LF1, 2  },  // Map Left-1 to GPIO 2
+        { BTN_LF2, 3  },  // Map Left-2 to GPIO 3
+        { BTN_LF3, 4  },  // Map Left-3 to GPIO 4
+        { BTN_LF4, 5  },  // Map Left-4 to GPIO 5
+        // Add more mappings as needed
+        // Delete mappings for buttons your controller doesn't have
+    };
+    ```
+    
+    ```cpp Example: Joybus Data Pin
+    const Pinout pinout = {
+        .joybus_data = 28,  // GameCube/N64 data pin
+        .nunchuk_detect = -1,  // -1 disables feature
+        .nunchuk_sda = -1,
+        .nunchuk_scl = -1,
+    };
+    ```
+    </CodeGroup>
+    
+    <Tip>
+      Delete button mappings for buttons your controller doesn't have - they're optional.
+    </Tip>
+  </Step>
+
+  <Step title="Wait for indexing to complete">
+    Watch the bottom status bar for:
+    - "Rebuilding IntelliSense Index"
+    - "Loading Project Tasks"
+    
+    <Note>
+      **First build for Pico:** May take 5-10 minutes as PlatformIO downloads 2-3GB of dependencies. Subsequent builds are much faster.
+    </Note>
+  </Step>
+
+  <Step title="Build the firmware">
+    Click the **Build** button (checkmark icon) in the bottom left.
+    
+    The compiled firmware will be located at:
+    ```
+    HayBox/.pio/build/<environment>/firmware.uf2  (Pico)
+    HayBox/.pio/build/<environment>/firmware.hex  (Arduino)
+    ```
+    
+    <CodeGroup>
+    ```bash Alternative: PlatformIO CLI
+    # Build specific environment
+    pio run -e pico
+    
+    # Build all environments
+    pio run
+    
+    # Clean build
+    pio run -t clean
+    pio run -e pico
+    ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Upload firmware">
+    **For Pico/RP2040:**
+    1. Hold BOOTSEL button while plugging in (or RT2/C-Down if HayBox already installed)
+    2. Drag `firmware.uf2` onto the `RPI-RP2` drive that appears
+    
+    **For Arduino:**
+    1. Plug in controller via USB
+    2. Click **Upload** button (right arrow icon) in bottom left
+    
+    Or use the [installation guide](/installation) for alternative flashing methods.
+  </Step>
+</Steps>
+
+## Building with GitHub Codespaces
+
+Build and edit HayBox in the cloud without installing anything locally.
+
+<Steps>
+  <Step title="Create a fork">
+    1. Log in to [GitHub](https://github.com)
+    2. Navigate to [HayBox repository](https://github.com/JonnyHaystack/HayBox)
+    3. Click **Fork** in the top right
+    4. Create the fork under your account
+  </Step>
+
+  <Step title="Create a Codespace">
+    1. In your fork, click the green **Code** button
+    2. Select the **Codespaces** tab
+    3. Click **Create codespace on master**
+    
+    VS Code will open in your browser with all dependencies pre-installed.
+    
+    <Note>
+      GitHub's free tier includes [60 core-hours per month](https://docs.github.com/en/billing/managing-billing-for-github-codespaces/about-billing-for-github-codespaces#monthly-included-storage-and-core-hours-for-personal-accounts). Make sure to stop your Codespace when not using it.
+    </Note>
+  </Step>
+
+  <Step title="Build firmware">
+    Follow the same steps as [building locally](#build-process):
+    1. Select your environment
+    2. Edit config files if needed
+    3. Click **Build**
+    
+    The build runs on GitHub's servers, not your local machine.
+  </Step>
+
+  <Step title="Download compiled firmware">
+    Since you can't use the Upload button in Codespaces:
+    
+    1. Open the Explorer sidebar (folder icon)
+    2. Navigate to `.pio/build/<environment>/`
+    3. Right-click `firmware.uf2` (or `firmware.hex`)
+    4. Select **Download**
+    5. Flash manually using the [installation guide](/installation)
+  </Step>
+
+  <Step title="Stop Codespace when done">
+    To preserve your free tier quota:
+    1. Click your profile icon in bottom left
+    2. Select **Stop Current Codespace**
+    
+    Or manage all Codespaces at [github.com/codespaces](https://github.com/codespaces).
+  </Step>
+</Steps>
+
+<Warning>
+  Always stop your Codespace when finished to avoid consuming your monthly quota.
+</Warning>
+
+## Building with GitHub Actions
+
+Automatically build firmware whenever you push changes.
+
+<Steps>
+  <Step title="Fork and enable Actions">
+    1. [Fork the HayBox repository](https://github.com/JonnyHaystack/HayBox/fork)
+    2. In your fork, go to **Settings → Actions → General**
+    3. Select **Allow all actions and reusable workflows**
+    4. Click **Save**
+  </Step>
+
+  <Step title="Edit code in browser">
+    Use GitHub's built-in editor:
+    1. Navigate to your fork
+    2. Press `.` (period key) to open github.dev editor
+    3. Edit your config files in `config/<environment>/config.cpp`
+    
+    <CodeGroup>
+    ```cpp Example: Edit Button Mapping
+    // In config/pico/config.cpp
+    GpioButtonMapping button_mappings[] = {
+        { BTN_LF1, 2  },  // Changed from GPIO 3
+        { BTN_LF2, 4  },  // Changed from GPIO 5
+        // ... modify as needed
+    };
+    ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Commit and push changes">
+    1. Click **Source Control** icon in left sidebar
+    2. Stage your changes (click + next to files)
+    3. Write a commit message
+    4. Click **Commit & Push**
+    
+    This triggers a GitHub Actions build automatically.
+  </Step>
+
+  <Step title="Monitor build progress">
+    1. Go to the **Actions** tab in your repository
+    2. Click on your latest workflow run
+    3. Watch the build progress for each environment
+    
+    Builds typically take 5-10 minutes depending on environments.
+  </Step>
+
+  <Step title="Download artifacts">
+    Once the build completes:
+    1. Scroll to the bottom of the workflow run page
+    2. Download the artifact for your environment (e.g., `HayBox-<commit>-pico.uf2`)
+    3. Flash the firmware using the [installation guide](/installation)
+  </Step>
+</Steps>
+
+### Customize Build Matrix
+
+Optimize build times by only building environments you need:
+
+<CodeGroup>
+```yaml .github/workflows/build.yml
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          # Keep only the environments you need
+          - env: pico
+            bin_ext: uf2
+          - env: b0xx_r4
+            bin_ext: uf2
+          # Remove environments you don't use to speed up builds
+          # - env: arduino_leonardo
+          #   bin_ext: hex
+```
+</CodeGroup>
+
+<Tip>
+  Remove unused environments from the matrix to reduce build time and resource usage.
+</Tip>
+
+## PlatformIO Configuration
+
+### Environment Structure
+
+Each build environment is configured in `platformio.ini` and its corresponding `config/<env>/env.ini`:
+
+<CodeGroup>
+```ini platformio.ini
+[platformio]
+name = HayBox
+default_envs = pico
+extra_configs = config/*/env.ini  # Loads all env.ini files
+
+[env]
+build_type = release
+custom_firmware_version = 3.1.0
+build_flags =
+    -D 'DEVICE_NAME="${PIOENV}"'
+    -D 'FIRMWARE_VERSION="${this.custom_firmware_version}"'
+```
+
+```ini config/pico/env.ini
+[env:pico]
+extends = arduino_pico_base
+build_src_filter =
+    ${arduino_pico_base.build_src_filter}
+    +<config/pico>  # Include pico-specific config
+```
+
+```ini config/b0xx_r1/env.ini
+[env:b0xx_r1]
+extends = avr_usb
+board = leonardo
+build_src_filter = 
+    ${avr_usb.build_src_filter}
+    +<config/b0xx_r1>  # Include B0XX R1 config
+```
+</CodeGroup>
+
+### Available Base Environments
+
+| Base Environment | Platform | Use Case |
+|-----------------|----------|----------|
+| `arduino_pico_base` | RP2040 | Raspberry Pi Pico and RP2040 boards |
+| `avr_usb` | AVR | Arduino with native USB (Leonardo, Micro) |
+| `avr_nousb` | AVR | Arduino without USB (Uno, Nano, Mega) |
+
+## Customizing Button Mappings
+
+### Edit Config File
+
+Each environment has its own config in `config/<environment>/config.cpp`:
+
+<CodeGroup>
+```cpp config/pico/config.cpp
+#include "comms/backend_init.hpp"
+#include "config_defaults.hpp"
+#include "input/DebouncedGpioButtonInput.hpp"
+// ... other includes
+
+// Define your button-to-GPIO mappings
+GpioButtonMapping button_mappings[] = {
+    // Left side buttons
+    { BTN_LF1, 2  },  // Left face 1 -> GPIO 2
+    { BTN_LF2, 3  },  // Left face 2 -> GPIO 3  
+    { BTN_LF3, 4  },  // Left face 3 -> GPIO 4
+    { BTN_LF4, 5  },  // Left face 4 -> GPIO 5
+    { BTN_LF5, 1  },  // Left face 5 -> GPIO 1
+    
+    // Modifier buttons
+    { BTN_LT1, 6  },  // Mod X -> GPIO 6
+    { BTN_LT2, 7  },  // Mod Y -> GPIO 7
+    
+    // Center buttons
+    { BTN_MB1, 0  },  // Start -> GPIO 0
+    { BTN_MB2, 10 },  // Select -> GPIO 10
+    { BTN_MB3, 11 },  // Home -> GPIO 11
+    
+    // Right triggers
+    { BTN_RT1, 14 },  // A -> GPIO 14
+    { BTN_RT2, 15 },  // C-Down -> GPIO 15
+    { BTN_RT3, 13 },  // C-Left -> GPIO 13
+    { BTN_RT4, 12 },  // C-Up -> GPIO 12
+    { BTN_RT5, 16 },  // C-Right -> GPIO 16
+    
+    // Right face buttons
+    { BTN_RF1, 26 },  // B -> GPIO 26
+    { BTN_RF2, 21 },  // X -> GPIO 21
+    { BTN_RF3, 19 },  // Z -> GPIO 19
+    { BTN_RF4, 17 },  // R -> GPIO 17
+    
+    // Lightshield buttons (optional)
+    { BTN_RF5, 27 },
+    { BTN_RF6, 22 },
+    { BTN_RF7, 20 },
+    { BTN_RF8, 18 },
+};
+```
+
+```cpp Example: Minimal Button Set
+// If your controller doesn't have all buttons
+GpioButtonMapping button_mappings[] = {
+    { BTN_LF1, 2 },
+    { BTN_LF2, 3 },
+    { BTN_LF3, 4 },
+    { BTN_LF4, 5 },
+    { BTN_LT1, 6 },  // Mod X
+    { BTN_LT2, 7 },  // Mod Y
+    { BTN_MB1, 0 },  // Start
+    { BTN_RT1, 14 }, // A
+    { BTN_RF1, 26 }, // B
+    // No lightshield buttons - just omit them
+};
+```
+</CodeGroup>
+
+### Button Name Reference
+
+| Button Code | Typical Function | Melee Mapping |
+|-------------|-----------------|---------------|
+| `BTN_LF1` - `BTN_LF5` | Left face buttons | Up, Down, Left, Right, L |
+| `BTN_LT1`, `BTN_LT2` | Left triggers | Mod X, Mod Y |
+| `BTN_MB1` - `BTN_MB3` | Middle buttons | Start, Select, Home |
+| `BTN_RT1` - `BTN_RT5` | Right triggers | A, C-Down, C-Left, C-Up, C-Right |
+| `BTN_RF1` - `BTN_RF4` | Right face buttons | B, X, Z, R |
+| `BTN_RF5` - `BTN_RF8` | Extra buttons | Lightshield buttons |
+
+<Note>
+  Button codes are logical identifiers. The actual function depends on the game mode you select.
+</Note>
+
+## Advanced Customization
+
+### Creating Custom Input Modes
+
+Create custom modes for different games:
+
+<CodeGroup>
+```cpp src/modes/CustomMode.hpp
+#ifndef _MODES_CUSTOMMODE_HPP
+#define _MODES_CUSTOMMODE_HPP
+
+#include "core/ControllerMode.hpp"
+#include "core/socd.hpp"
+#include "core/state.hpp"
+
+class CustomMode : public ControllerMode {
+  public:
+    CustomMode(socd::SocdType socd_type);
+
+  private:
+    void UpdateDigitalOutputs(const InputState &inputs, OutputState &outputs);
+    void UpdateAnalogOutputs(const InputState &inputs, OutputState &outputs);
+};
+
+#endif
+```
+
+```cpp src/modes/CustomMode.cpp
+#include "modes/CustomMode.hpp"
+
+CustomMode::CustomMode(socd::SocdType socd_type) {
+    _socd_pair_count = 2;
+    _socd_pairs = new socd::SocdPair[_socd_pair_count]{
+        socd::SocdPair{&InputState::left, &InputState::right, socd_type},
+        socd::SocdPair{&InputState::down, &InputState::up,    socd_type},
+    };
+}
+
+void CustomMode::UpdateDigitalOutputs(const InputState &inputs, OutputState &outputs) {
+    // Map digital buttons
+    outputs.a = inputs.rt1;  // A button
+    outputs.b = inputs.rf1;  // B button
+    outputs.x = inputs.rf2;  // X button
+    outputs.y = inputs.rf3;  // Y button
+    // ... add more mappings
+}
+
+void CustomMode::UpdateAnalogOutputs(const InputState &inputs, OutputState &outputs) {
+    // Update stick positions
+    UpdateDirections(
+        inputs.lf3,  // left
+        inputs.lf1,  // right  
+        inputs.lf2,  // down
+        inputs.lf4,  // up
+        inputs.lf3,  // c_left
+        inputs.lf1,  // c_right
+        inputs.lf2,  // c_down
+        inputs.lf4,  // c_up
+        ANALOG_STICK_MIN,
+        ANALOG_STICK_NEUTRAL,
+        ANALOG_STICK_MAX,
+        outputs
+    );
+    
+    // Add modifier logic here if needed
+}
+```
+</CodeGroup>
+
+### Configuring SOCD Cleaning
+
+Set simultaneous opposite cardinal direction (SOCD) behavior:
+
+<CodeGroup>
+```cpp Example: SOCD Configuration
+_socd_pair_count = 4;
+_socd_pairs = new socd::SocdPair[_socd_pair_count]{
+    socd::SocdPair{&InputState::left,    &InputState::right,   socd::SOCD_2IP_NO_REAC},
+    socd::SocdPair{&InputState::down,    &InputState::up,      socd::SOCD_2IP_NO_REAC},
+    socd::SocdPair{&InputState::c_left,  &InputState::c_right, socd::SOCD_NEUTRAL},
+    socd::SocdPair{&InputState::c_down,  &InputState::c_up,    socd::SOCD_NEUTRAL},
+};
+```
+</CodeGroup>
+
+**Available SOCD Types:**
+
+| SOCD Type | Behavior |
+|-----------|----------|
+| `SOCD_NEUTRAL` | Left + Right = Neutral (default) |
+| `SOCD_2IP` | Second Input Priority with reactivation |
+| `SOCD_2IP_NO_REAC` | Second Input Priority without reactivation |
+| `SOCD_DIR1_PRIORITY` | First direction always wins |
+| `SOCD_DIR2_PRIORITY` | Second direction always wins |
+| `SOCD_NONE` | No SOCD resolution (game decides) |
+
+## Troubleshooting Builds
+
+### Common Build Errors
+
+<AccordionGroup>
+  <Accordion title="Long path errors (Windows)">
+    Run this command and rebuild:
+    ```bash
+    git config --global core.longpaths true
+    ```
+  </Accordion>
+  
+  <Accordion title="Missing dependencies">
+    PlatformIO should auto-install dependencies. If it fails:
+    ```bash
+    pio pkg install
+    pio lib install
+    ```
+  </Accordion>
+  
+  <Accordion title="Upload failed">
+    **For Pico:** Make sure it's in bootsel mode (RPI-RP2 drive visible)
+    
+    **For Arduino:** Check that the correct COM port is selected in Device Manager
+  </Accordion>
+  
+  <Accordion title="IntelliSense errors (red squiggles)">
+    Wait for "Rebuilding IntelliSense Index" to complete. If persists:
+    ```bash
+    # Reload VS Code
+    Ctrl+Shift+P -> "Reload Window"
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### First Build Taking Forever?
+
+<Note>
+  **Pico builds:** First build downloads 2-3GB of dependencies (SDK, toolchains, libraries). This is normal and only happens once. Subsequent builds are much faster (typically under 30 seconds).
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Installation Guide" icon="download" href="/installation">
+    Learn how to flash your compiled firmware
+  </Card>
+  
+  <Card title="Customization" icon="sliders">
+    Deep dive into SOCD modes, modifiers, and advanced features
+  </Card>
+  
+  <Card title="Mode Selection" icon="gamepad">
+    Configure button combinations for switching game modes
+  </Card>
+  
+  <Card title="Input Sources" icon="plug">
+    Add Nunchuk, GameCube controller, or switch matrix inputs
+  </Card>
+</CardGroup>

@@ -1,0 +1,312 @@
+---
+title: Pinouts and Button Mappings
+description: How to configure GPIO pin assignments and customize button mappings in HayBox
+---
+
+HayBox uses a flexible pinout system that allows you to map physical buttons to GPIO pins and configure communication interfaces. This page explains how pinouts work and how to customize them for your hardware.
+
+## Button Mapping Structure
+
+Button mappings are defined using the `GpioButtonMapping` structure, which connects logical buttons to physical GPIO pins.
+
+### Basic Example
+
+Here's a typical button mapping from the Raspberry Pi Pico config:
+
+```cpp
+GpioButtonMapping button_mappings[] = {
+    { BTN_LF1, 2  },  // Left finger 1 -> GPIO 2
+    { BTN_LF2, 3  },  // Left finger 2 -> GPIO 3
+    { BTN_LF3, 4  },  // Left finger 3 -> GPIO 4
+    { BTN_LF4, 5  },  // Left finger 4 -> GPIO 5
+    { BTN_LF5, 1  },  // Left finger 5 -> GPIO 1
+
+    { BTN_LT1, 6  },  // Left thumb 1 -> GPIO 6
+    { BTN_LT2, 7  },  // Left thumb 2 -> GPIO 7
+
+    { BTN_MB1, 0  },  // Middle button 1 -> GPIO 0
+    { BTN_MB2, 10 },  // Middle button 2 -> GPIO 10
+    { BTN_MB3, 11 },  // Middle button 3 -> GPIO 11
+
+    { BTN_RT1, 14 },  // Right thumb 1 -> GPIO 14
+    { BTN_RT2, 15 },  // Right thumb 2 -> GPIO 15
+    { BTN_RT3, 13 },  // Right thumb 3 -> GPIO 13
+    { BTN_RT4, 12 },  // Right thumb 4 -> GPIO 12
+    { BTN_RT5, 16 },  // Right thumb 5 -> GPIO 16
+
+    { BTN_RF1, 26 },  // Right finger 1 -> GPIO 26
+    { BTN_RF2, 21 },  // Right finger 2 -> GPIO 21
+    { BTN_RF3, 19 },  // Right finger 3 -> GPIO 19
+    { BTN_RF4, 17 },  // Right finger 4 -> GPIO 17
+
+    { BTN_RF5, 27 },  // Right finger 5 -> GPIO 27
+    { BTN_RF6, 22 },  // Right finger 6 -> GPIO 22
+    { BTN_RF7, 20 },  // Right finger 7 -> GPIO 20
+    { BTN_RF8, 18 },  // Right finger 8 -> GPIO 18
+};
+const size_t button_count = sizeof(button_mappings) / sizeof(GpioButtonMapping);
+```
+
+## Button Name Reference
+
+HayBox uses a standardized naming convention for buttons:
+
+<CardGroup cols={3}>
+  <Card title="Left Finger (LF)" icon="hand">
+    `BTN_LF1` through `BTN_LF16`
+    
+    Main action buttons on the left side
+  </Card>
+  
+  <Card title="Right Finger (RF)" icon="hand">
+    `BTN_RF1` through `BTN_RF16`
+    
+    Main action buttons on the right side
+  </Card>
+  
+  <Card title="Left Thumb (LT)" icon="thumbs-up">
+    `BTN_LT1` through `BTN_LT8`
+    
+    Thumb cluster on the left
+  </Card>
+  
+  <Card title="Right Thumb (RT)" icon="thumbs-up">
+    `BTN_RT1` through `BTN_RT8`
+    
+    Thumb cluster on the right
+  </Card>
+  
+  <Card title="Middle (MB)" icon="ellipsis">
+    `BTN_MB1` through `BTN_MB12`
+    
+    Center buttons (Start, Select, etc.)
+  </Card>
+</CardGroup>
+
+## Communication Pinout
+
+The `Pinout` structure defines pins used for communication interfaces:
+
+```cpp
+const Pinout pinout = {
+    .joybus_data = 28,      // GameCube/N64 data line
+    .nes_data = -1,         // NES controller data (-1 = unused)
+    .nes_clock = -1,        // NES controller clock
+    .nes_latch = -1,        // NES controller latch
+    .mux = -1,              // Multiplexer control pin
+    .nunchuk_detect = -1,   // Nunchuk detection pin
+    .nunchuk_sda = -1,      // Nunchuk I2C data
+    .nunchuk_scl = -1,      // Nunchuk I2C clock
+};
+```
+
+### Pin Descriptions
+
+| Pin | Purpose | Required |
+|-----|---------|----------|
+| `joybus_data` | GameCube/N64 console communication | For console use |
+| `nes_data` | NES controller data input | Optional |
+| `nes_clock` | NES controller clock | Optional |
+| `nes_latch` | NES controller latch | Optional |
+| `mux` | Multiplexer control (e.g., Brook board) | Optional |
+| `nunchuk_detect` | Wii Nunchuk connection detection | Optional |
+| `nunchuk_sda` | I2C data for Nunchuk | Optional |
+| `nunchuk_scl` | I2C clock for Nunchuk | Optional |
+
+<Note>
+Set unused pins to `-1` to disable them. This prevents the firmware from attempting to use non-existent hardware.
+</Note>
+
+## Platform-Specific Examples
+
+<Tabs>
+  <Tab title="RP2040 (Pico)">
+    RP2040 boards have more GPIO pins and can support advanced features:
+
+    ```cpp
+    // B0XX R4 configuration
+    GpioButtonMapping button_mappings[] = {
+        {BTN_LF1,  9 },
+        { BTN_LF2, 8 },
+        { BTN_LF3, 7 },
+        { BTN_LF4, 6 },
+        { BTN_LT1, 10},
+        { BTN_LT2, 11},
+        { BTN_MB1, 12},
+        { BTN_RT1, 28},
+        { BTN_RT2, 27},
+        { BTN_RT3, 14},
+        { BTN_RT4, 13},
+        { BTN_RT5, 15},
+        { BTN_RF1, 19},
+        { BTN_RF2, 18},
+        { BTN_RF3, 17},
+        { BTN_RF4, 16},
+        { BTN_RF5, 26},
+        { BTN_RF6, 22},
+        { BTN_RF7, 21},
+        { BTN_RF8, 20},
+    };
+
+    const Pinout pinout = {
+        .joybus_data = 2,
+        .nes_data = -1,
+        .nes_clock = -1,
+        .nes_latch = -1,
+        .mux = -1,
+        .nunchuk_detect = 3,  // Nunchuk support enabled
+        .nunchuk_sda = 4,
+        .nunchuk_scl = 5,
+    };
+    ```
+  </Tab>
+  
+  <Tab title="AVR (Arduino)">
+    AVR boards use standard Arduino pin numbering, including analog pins:
+
+    ```cpp
+    // GCCPCB1 configuration
+    const GpioButtonMapping button_mappings[] = {
+        { BTN_LF4, 16 },  // Digital pin 16
+        { BTN_LF3, 1  },
+        { BTN_LF2, 0  },
+        { BTN_LF1, 4  },
+        { BTN_LT1, 5  },
+        { BTN_LT2, 6  },
+        { BTN_MB1, 7  },
+        { BTN_RT3, 9  },
+        { BTN_RT4, 8  },
+        { BTN_RT2, 12 },
+        { BTN_RT1, 15 },
+        { BTN_RT5, 14 },
+        { BTN_RF1, A2 },  // Analog pins can be used as digital
+        { BTN_RF2, A1 },
+        { BTN_RF3, A0 },
+        { BTN_RF4, 13 },
+        { BTN_RF5, A4 },
+        { BTN_RF6, A3 },
+        { BTN_RF7, 11 },
+        { BTN_RF8, 10 },
+    };
+
+    const Pinout pinout = {
+        .joybus_data = A5,  // Can use analog pins for joybus
+        .nes_data = 0,
+        .nes_clock = 0,
+        .nes_latch = 0,
+        .mux = -1,
+        .nunchuk_detect = -1,
+        .nunchuk_sda = -1,
+        .nunchuk_scl = -1,
+    };
+    ```
+
+    <Warning>
+    On AVR, analog pins (A0-A5) can be used as digital GPIO, but be careful not to exceed the maximum number of available pins.
+    </Warning>
+  </Tab>
+</Tabs>
+
+## Customizing Your Pinout
+
+To create a custom pinout for your controller:
+
+### 1. Identify Your Hardware
+
+- Trace which GPIO pins each button connects to
+- Note which pins are used for special functions (I2C, SPI, etc.)
+- Check your microcontroller's pinout diagram
+
+### 2. Create Button Mappings
+
+Edit your config's `config.cpp` file:
+
+```cpp
+GpioButtonMapping button_mappings[] = {
+    { BTN_LF1, YOUR_PIN_NUMBER },
+    // Add all your buttons here
+};
+const size_t button_count = sizeof(button_mappings) / sizeof(GpioButtonMapping);
+```
+
+### 3. Configure Communication Pins
+
+```cpp
+const Pinout pinout = {
+    .joybus_data = YOUR_JOYBUS_PIN,
+    .nes_data = -1,  // Set to -1 if not used
+    // Configure other pins as needed
+};
+```
+
+### 4. Initialize Input Sources
+
+In your `setup()` function:
+
+```cpp
+// For RP2040 with debouncing:
+DebouncedGpioButtonInput<button_count> gpio_input(button_mappings);
+
+// For AVR without debouncing:
+static GpioButtonInput gpio_input(button_mappings, button_count);
+```
+
+## Advanced: Brook Board Support
+
+Some configs (like LBX and GCCMX) support Brook board multiplexing:
+
+```cpp
+Pinout pinout = {
+    .joybus_data = 7,
+    .mux = A4,  // Multiplexer control pin
+    // other pins...
+};
+
+// In setup():
+pinMode(pinout.mux, OUTPUT);
+if (inputs.rf1) {
+    digitalWrite(pinout.mux, HIGH);  // Enable Brook mode
+} else {
+    digitalWrite(pinout.mux, LOW);   // Enable HayBox mode
+}
+```
+
+This allows switching between HayBox firmware and Brook board firmware by holding a button during power-on.
+
+## Testing Your Configuration
+
+After customizing your pinout:
+
+1. **Build the firmware** with your custom config
+2. **Flash to your device**
+3. **Test each button** using a USB gamepad tester or the B0XX input viewer
+4. **Verify console communication** if using GameCube/N64 modes
+
+<Warning>
+Always double-check your pin assignments before flashing. Incorrect pinouts can cause:
+- Non-responsive buttons
+- Multiple buttons mapped to the same pin
+- Conflicts with communication interfaces
+</Warning>
+
+## Pin Assignment Best Practices
+
+1. **Group related buttons** - Keep finger buttons on adjacent pins for easier routing
+2. **Avoid special pins** - Don't use pins reserved for USB, crystal, or power
+3. **Consider routing** - Choose pins that make PCB routing easier
+4. **Test incrementally** - Add buttons one at a time when testing custom configs
+5. **Document your layout** - Keep notes on which physical button maps to which pin
+
+## Common Pin Conflicts
+
+| Platform | Reserved Pins | Purpose |
+|----------|--------------|----------|
+| RP2040 | GPIO 23-25 | Internal (Pico W wireless) |
+| RP2040 | GPIO 25 | Onboard LED (original Pico) |
+| AVR Leonardo | D2, D3 | Hardware interrupts |
+| AVR Leonardo | D13 | Onboard LED |
+| AVR | A4, A5 | I2C (if using Nunchuk) |
+
+<Note>
+While reserved pins *can* be used for buttons in some cases, it's best to avoid them to prevent conflicts with built-in hardware or future features.
+</Note>

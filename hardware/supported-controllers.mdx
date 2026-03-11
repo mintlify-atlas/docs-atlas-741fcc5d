@@ -1,0 +1,156 @@
+---
+title: Supported Controllers
+description: Complete list of controllers and PCBs compatible with HayBox firmware
+---
+
+HayBox supports a wide variety of controllers and PCBs, primarily targeting B0XX-style digital controllers. The firmware is highly modular and can be adapted to different hardware configurations.
+
+## Official B0XX Controllers
+
+<CardGroup cols={2}>
+  <Card title="B0XX R1" icon="gamepad">
+    First generation B0XX controller with ATMega32U4 (Arduino Leonardo)
+    - Platform: AVR (Leonardo)
+    - Config: `b0xx_r1`
+  </Card>
+  
+  <Card title="B0XX R2" icon="gamepad">
+    Second generation B0XX controller with improved design
+    - Platform: AVR (Leonardo)
+    - Config: `b0xx_r2`
+  </Card>
+  
+  <Card title="B0XX R4" icon="gamepad">
+    Latest generation B0XX with RP2040 processor and advanced features
+    - Platform: RP2040 (Raspberry Pi Pico)
+    - Dual-core processing
+    - Config: `b0xx_r4`
+  </Card>
+</CardGroup>
+
+## Third-Party Controllers
+
+### Fight Sticks and Rectangles
+
+<CardGroup cols={2}>
+  <Card title="LBX" icon="box">
+    Low Budget Box - DIY-friendly rectangle controller
+    - Platform: AVR (Leonardo)
+    - Brook board support with mode switching
+    - Config: `lbx`
+  </Card>
+  
+  <Card title="Smash Box" icon="square">
+    Hit Box Arcade's Smash Box controller
+    - Platform: AVR (Arduino Mega)
+    - Additional thumb cluster buttons
+    - Config: `smashbox`
+  </Card>
+  
+  <Card title="C53" icon="grid">
+    Compact 53-key layout controller
+    - Platform: RP2040
+    - Config: `c53`
+  </Card>
+  
+  <Card title="Schism" icon="layer-group">
+    Advanced rectangle controller design
+    - Platform: RP2040
+    - Config: `schism`
+  </Card>
+</CardGroup>
+
+### GameCube PCBs
+
+<CardGroup cols={2}>
+  <Card title="GCCPCB1" icon="microchip">
+    Crane's GameCube controller PCB (Version 1)
+    - Platform: AVR (Leonardo)
+    - Drop-in GameCube shell replacement
+    - Config: `gccpcb1`
+  </Card>
+  
+  <Card title="GCCPCB2" icon="microchip">
+    Crane's GameCube controller PCB (Version 2)
+    - Platform: AVR (Leonardo)
+    - Improved revision with better routing
+    - Config: `gccpcb2`
+  </Card>
+  
+  <Card title="GCCMX" icon="keyboard">
+    GameCube MX-style mechanical switch PCB
+    - Platform: AVR (Leonardo)
+    - Cherry MX switch compatibility
+    - Brook board mode support
+    - Config: `gccmx`
+  </Card>
+  
+  <Card title="HTangl V1" icon="h">
+    HTangl's custom GameCube PCB
+    - Platform: RP2040
+    - Config: `htangl_v1`
+  </Card>
+</CardGroup>
+
+## Development Boards
+
+<CardGroup cols={2}>
+  <Card title="Raspberry Pi Pico" icon="raspberry-pi">
+    Generic RP2040 development board configuration
+    - Platform: RP2040
+    - 22 GPIO buttons mapped
+    - Ideal for prototyping
+    - Config: `pico`
+  </Card>
+  
+  <Card title="Arduino Boards" icon="microchip">
+    Generic Arduino configurations for testing
+    - Uno (ATmega328P, no USB)
+    - Nano (ATmega328P, no USB)
+    - Leonardo (ATMega32U4, USB)
+    - Micro (ATMega32U4, USB)
+    - Mega (ATmega2560, no USB)
+    - Config: `arduino`
+  </Card>
+</CardGroup>
+
+## Platform Comparison
+
+| Feature | RP2040 (Pico) | AVR (ATMega32U4) |
+|---------|---------------|------------------|
+| Clock Speed | 133-200 MHz | 16 MHz |
+| Cores | Dual-core | Single-core |
+| RAM | 264 KB | 2.5 KB |
+| Flash | 2 MB | 32 KB |
+| Input Latency | ~0.5ms | ~1-2ms |
+| USB Stack | TinyUSB | LUFA |
+| Console Support | Joybus (PIO) | Joybus (bit-bang) |
+| Advanced Features | Display, RGB LEDs, Config storage | Limited |
+
+<Note>
+RP2040-based controllers offer significantly better performance and more features, but AVR-based controllers are well-tested and reliable for most use cases.
+</Note>
+
+## Choosing a Configuration
+
+When selecting a configuration for your controller:
+
+1. **Check your PCB documentation** - Most PCBs will specify which config to use
+2. **Identify your microcontroller** - Look for markings like "ATMega32U4" or "RP2040"
+3. **Browse the configs** - Check the [`config/` directory](https://github.com/JonnyHaystack/HayBox/tree/main/config) for your hardware
+4. **Verify pin mappings** - Ensure the button mappings match your hardware layout
+
+<Warning>
+Using the wrong configuration can result in incorrect button mappings or non-functional hardware. Always verify your hardware matches the config before flashing.
+</Warning>
+
+## Creating Custom Configurations
+
+If your hardware isn't listed, you can create a custom configuration:
+
+1. Copy an existing config directory (e.g., `config/pico`)
+2. Modify `config.cpp` with your button mappings
+3. Update `env.ini` with the correct platform settings
+4. Build and flash your custom firmware
+
+See the [Pinouts](/hardware/pinouts) page for details on configuring button mappings.

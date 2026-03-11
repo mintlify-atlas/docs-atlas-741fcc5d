@@ -1,0 +1,303 @@
+---
+title: Troubleshooting
+description: Common issues and solutions for HayBox firmware
+icon: wrench
+---
+
+<Note>
+  Most controller issues can be resolved by checking power requirements, adapter compatibility, and polling rate settings.
+</Note>
+
+## Common Issues
+
+<AccordionGroup>
+  <Accordion title="Controller not working with console or GameCube adapter">
+    This is one of the most common issues and usually relates to polling rate optimization or adapter compatibility.
+
+    ### Arduino-based controllers with official adapters
+
+    If you are using an official adapter with an Arduino-based controller, you will likely need to disable the polling latency optimization:
+
+    - **Hold A on plugin** - This disables the polling latency optimization by passing in a polling rate of 0 to the GamecubeBackend constructor
+
+    This issue occurs because the official adapter may not be compatible with the default polling rate optimization that HayBox uses.
+
+    ### Power requirements
+
+    Different microcontrollers have different power requirements:
+
+    **Arduino-based controllers (without boost circuit):**
+    - Require **5V power**
+    - For Mayflash adapter: both USB cables must be plugged in
+    - For console: the rumble line needs to be intact
+
+    **Pico/RP2040-based controllers:**
+    - Work natively with **3.3V power**
+    - No special power requirements
+
+    <Tip>
+      If your Arduino-based controller is not responding, check that it's receiving adequate 5V power. The rumble line on GameCube cables is often used for power delivery.
+    </Tip>
+  </Accordion>
+
+  <Accordion title="Arduino-based controller not responding">
+    Arduino-based controllers (like B0XX R1-3, LBX) have specific power requirements that differ from Pico-based controllers.
+
+    ### Check power supply
+
+    Arduino controllers **without a boost circuit** require 5V power:
+
+    1. **On Mayflash adapter**: Ensure both USB cables are plugged in
+    2. **On console**: Verify the rumble line in your GameCube cable is intact
+    3. **On official adapter**: Hold A on plugin to disable polling optimization
+
+    ### Polling rate issues
+
+    If the controller works but feels laggy or inconsistent:
+
+    - Hold **RT1 (A)** on plugin to enable GameCube backend with polling rate fix disabled
+    - This is specifically designed for use with GCC adapters
+
+    <Warning>
+      Using 1000Hz polling rate on console will work but results in more input lag. The polling rate setting is meant to sync with your adapter, not overclock the console.
+    </Warning>
+  </Accordion>
+
+  <Accordion title="Pico/RP2040 controller issues">
+    While Pico-based controllers generally have better compatibility, there are still some things to check.
+
+    ### Power advantages
+
+    Pico controllers work natively with 3.3V power, making them more compatible:
+    - No boost circuit required
+    - More flexible power options
+    - Better adapter compatibility
+
+    ### Entering bootsel mode
+
+    To flash new firmware or troubleshoot:
+    - Hold **RT2 (C-Down)** on plugin to enter bootsel mode
+    - The Pico will appear as a USB drive (RPI-RP2)
+    - Drag and drop `.uf2` firmware files
+
+    ### Polling rate
+
+    Unlike Arduino, Pico doesn't require polling rate configuration:
+    - Pico has enough processing power to read inputs after receiving the console poll
+    - No need to predict poll timing
+    - Automatic optimization for both console and PC use
+  </Accordion>
+
+  <Accordion title="Mayflash adapter setup">
+    The Mayflash GameCube adapter requires specific setup depending on your controller type.
+
+    ### Arduino-based controllers
+
+    1. **Plug in both USB cables** - Arduino controllers need 5V power
+    2. The first cable (data + power) connects to your PC
+    3. The second cable (power only) provides additional power
+
+    Without both cables, Arduino controllers without boost circuits will not receive adequate power.
+
+    ### Pico-based controllers
+
+    - Only one USB cable needed
+    - Native 3.3V operation
+    - Plug and play compatibility
+
+    <Tip>
+      If you're experiencing issues with a Mayflash adapter, first verify you have both USB cables connected for Arduino controllers.
+    </Tip>
+  </Accordion>
+
+  <Accordion title="Official adapter compatibility">
+    The official Nintendo GameCube adapter has specific compatibility requirements with HayBox.
+
+    ### Arduino controllers
+
+    **Required action**: Hold **A** on plugin
+
+    This disables the polling latency optimization that is incompatible with official adapters. Specifically:
+    - Passes a polling rate of 0 to the GamecubeBackend constructor
+    - Disables predictive polling timing
+    - Ensures compatibility with official adapter firmware
+
+    ### Why this is necessary
+
+    By default, HayBox optimizes polling for reduced latency by predicting when the next poll will arrive. The official adapter's timing doesn't work well with this optimization, requiring it to be disabled.
+
+    ### Alternative button holds
+
+    - **RT1 (A)** on plugin - GameCube backend with polling rate fix disabled (for GCC adapters)
+    - **RT3 (C-Left)** on plugin - Nintendo 64 backend (60Hz polling rate)
+  </Accordion>
+
+  <Accordion title="Boost circuit requirements">
+    Some Arduino-based controllers require a boost circuit to function properly without external power.
+
+    ### What is a boost circuit?
+
+    A boost circuit steps up voltage from 3.3V to 5V, allowing Arduino controllers to:
+    - Operate with single USB cable on adapters
+    - Work without rumble line on console
+    - Function independently of external 5V power
+
+    ### Controllers without boost circuits
+
+    If your Arduino controller lacks a boost circuit:
+
+    **On Mayflash adapter:**
+    - Requires both USB cables plugged in
+    - Cannot operate on single cable power
+
+    **On console:**
+    - Requires intact rumble line for power
+    - May not work with damaged GameCube cables
+
+    ### Pico alternative
+
+    Pico/RP2040 controllers don't need boost circuits because:
+    - Native 3.3V operation
+    - Lower power requirements
+    - Better power efficiency
+
+    <Note>
+      If you're building a new controller, consider using a Pico/RP2040 to avoid boost circuit requirements entirely.
+    </Note>
+  </Accordion>
+
+  <Accordion title="Console detection issues">
+    HayBox automatically detects whether you're plugged into a console or USB, but sometimes this needs manual override.
+
+    ### Pico/RP2040 auto-detection
+
+    Automatically detects:
+    - USB vs GameCube vs Nintendo 64
+    - Default is **XInput** for USB (PC gaming)
+
+    **Manual backend selection** (hold on plugin):
+    - **RF2 (X)** - Nintendo Switch USB mode (also sets Ultimate mode)
+    - **RF3 (Z)** - DInput mode (for games without XInput support)
+
+    ### Arduino/AVR detection
+
+    - **USB detected** → DInput backend
+    - **No USB** → GameCube backend by default
+
+    **Manual backend selection** (hold on plugin):
+    - **RT1 (A)** - GameCube backend with polling rate fix disabled (for GCC adapters)
+    - **RT3 (C-Left)** - Nintendo 64 backend (60Hz polling rate)
+  </Accordion>
+
+  <Accordion title="Dolphin/Slippi not detecting inputs">
+    If your controller is recognized but inputs aren't working in Dolphin or Slippi, you likely need the correct controller profile.
+
+    ### Profile files
+
+    HayBox uses different mappings than official B0XX firmware. Profiles are located in the `dolphin` folder:
+
+    **Windows:**
+    - `HayBox_XInput.ini` - For Pico/RP2040 (e.g., B0XX R4)
+    - `HayBox_DInput.ini` - For Arduino/AVR (e.g., B0XX R1-3, LBX)
+
+    **Linux:**
+    - `HayBox_XInput_Linux.ini` - For Pico/RP2040
+    - `HayBox_DInput_Linux.ini` - For Arduino/AVR
+
+    **macOS:**
+    - `HayBox_DInput_macOS.ini` - DInput only (limited support)
+
+    ### Installation locations
+
+    **Slippi Launcher:**
+    - Windows: `%appdata%\Slippi Launcher\netplay\User\Config\Profiles\GCPad\`
+    - Linux: `~/.config/SlippiOnline/Config/Profiles/GCPad/`
+    - macOS: `/Users/<USER>/Library/Application Support/Slippi Launcher/netplay/Slippi Dolphin.app/Contents/Resources/Sys/Config/Profiles/GCPad`
+
+    **Vanilla Dolphin:**
+    - Windows: `%userprofile%\Documents\Dolphin Emulator\Config\Profiles\GCPad\`
+    - Linux: `~/.config/dolphin-emu/Profiles/GCPad/`
+
+    ### Setup steps
+
+    1. Copy the appropriate `.ini` file to the correct folder
+    2. In Dolphin, configure a "Standard Controller"
+    3. Click **Refresh** next to the Device dropdown
+    4. Select the HayBox profile and click **Load** (not Save)
+    5. Ensure correct device is selected in dropdown
+
+    <Warning>
+      macOS only supports DInput and compatibility is poor. Pico/RP2040 controllers must force DInput mode by holding Z on plugin. This is unsupported due to Apple's limited controller support.
+    </Warning>
+  </Accordion>
+
+  <Accordion title="Mode switching not working">
+    HayBox allows mode switching on-the-fly, but requires specific button combinations.
+
+    ### Default controller modes
+
+    Hold **Start + Mod X +** one of:
+    - **L** - Melee mode (default)
+    - **Left** - Project M/Project+ mode
+    - **Down** - Ultimate mode
+    - **B** - Rivals of Aether mode
+    - **R** - Rivals of Aether 2 mode
+    - **Right** - FGC mode (Hitbox style)
+
+    ### Default keyboard modes
+
+    Only available with **DInput backend** (not XInput):
+    - **Start + Mod Y + L** - Default keyboard mode
+
+    ### Troubleshooting
+
+    If mode switching isn't working:
+    1. Ensure you're pressing the correct combination
+    2. Verify all buttons in the combination are functioning
+    3. Check that you're not in a mode that remaps these buttons
+    4. For keyboard modes, confirm you're using DInput backend
+  </Accordion>
+
+  <Accordion title="Building/flashing issues">
+    If you're having trouble compiling or flashing HayBox firmware.
+
+    ### First time Pico build
+
+    If you see "Rebuilding IntelliSense Index" or "Loading Project Tasks":
+    - **Wait for it to complete** - This can take a while
+    - First build downloads 2-3GB of dependencies
+    - Subsequent builds will be much faster
+
+    ### Windows long path issues
+
+    On Windows, first time building HayBox:
+    1. Open any terminal (VS Code terminal, cmd, or PowerShell)
+    2. Run: `git config --global core.longpaths true`
+    3. Restart VS Code if necessary
+
+    ### Flashing failures
+
+    **Pico/RP2040:**
+    - Hold bootsel button while plugging in (or RT2/C-Down if HayBox already installed)
+    - Wait for RPI-RP2 drive to appear
+    - Drag and drop `.uf2` file onto the drive
+
+    **Arduino/AVR:**
+    - Use QMK Toolbox or similar tool to flash `.hex` files
+    - Ensure correct COM port is selected
+    - Try resetting the board if flashing fails
+  </Accordion>
+</AccordionGroup>
+
+## Getting Help
+
+If your issue isn't covered here:
+
+1. Check the [GitHub Issues](https://github.com/JonnyHaystack/HayBox/issues) for similar problems
+2. Review the [README](https://github.com/JonnyHaystack/HayBox/blob/master/README.md) for detailed configuration info
+3. Join the community Discord for real-time support
+4. Create a new GitHub issue with detailed information about your setup
+
+<Tip>
+  When asking for help, always include: your microcontroller type (Pico or Arduino), what you're connecting to (console/adapter/PC), and what firmware version you're using.
+</Tip>

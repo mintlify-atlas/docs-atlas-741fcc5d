@@ -1,0 +1,376 @@
+---
+title: Dolphin Setup
+description: How to install and configure Dolphin/Slippi controller profiles for HayBox
+icon: dolphin
+---
+
+HayBox requires different Dolphin controller profiles than the official B0XX firmware due to its improved DInput mappings that work better across multiple games. This guide covers installation and setup for all operating systems.
+
+## Why Different Profiles?
+
+HayBox uses different DInput mappings than the official B0XX firmware. These mappings:
+- Work consistently across multiple games
+- Provide better compatibility with various emulators
+- Separate XInput and DInput configurations properly
+- Support both Arduino and Pico controllers with different backends
+
+## Available Profiles
+
+The `dolphin/` folder in the HayBox repository contains several profile files:
+
+<Tabs>
+  <Tab title="Windows">
+    ### For Pico/RP2040 Controllers
+    **File:** `HayBox_XInput.ini`
+    
+    Use this for:
+    - B0XX R4
+    - Custom Pico-based controllers
+    - Any controller running HayBox on RP2040
+
+    ### For Arduino/AVR Controllers
+    **File:** `HayBox_DInput.ini`
+    
+    Use this for:
+    - B0XX R1
+    - B0XX R2  
+    - B0XX R3
+    - LBX
+    - Custom Arduino-based controllers
+  </Tab>
+  
+  <Tab title="Linux">
+    ### For Pico/RP2040 Controllers
+    **File:** `HayBox_XInput_Linux.ini`
+    
+    Use this for:
+    - B0XX R4
+    - Custom Pico-based controllers
+    - Any controller running HayBox on RP2040
+
+    ### For Arduino/AVR Controllers
+    **File:** `HayBox_DInput_Linux.ini`
+    
+    Use this for:
+    - B0XX R1
+    - B0XX R2
+    - B0XX R3
+    - LBX
+    - Custom Arduino-based controllers
+  </Tab>
+  
+  <Tab title="macOS">
+    ### For All Controllers
+    **File:** `HayBox_DInput_macOS.ini`
+
+    <Warning>
+    macOS only supports DInput, so Pico users must force DInput mode by holding Z on plugin. XInput is not available on macOS.
+    </Warning>
+
+    **Limitations:**
+    - Only DInput backend supported
+    - Pico controllers must force DInput (hold Z on plugin)
+    - May not work reliably due to Apple's controller support issues
+    - Considered unsupported by HayBox
+
+    <Info>
+    The developer does not own Apple devices and cannot provide support for macOS issues.
+    </Info>
+  </Tab>
+</Tabs>
+
+## Installation Instructions
+
+<Steps>
+  <Step title="Locate the profile file">
+    Download or clone the HayBox repository and navigate to the `dolphin/` folder. Identify which `.ini` file you need based on your operating system and controller type.
+  </Step>
+  
+  <Step title="Find your Dolphin config directory">
+    The location varies by operating system and Dolphin version:
+
+    <Tabs>
+      <Tab title="Slippi Launcher">
+        **Windows:**
+        ```
+        %appdata%\Slippi Launcher\netplay\User\Config\Profiles\GCPad\
+        ```
+
+        **Linux:**
+        ```
+        ~/.config/SlippiOnline/Config/Profiles/GCPad/
+        ```
+
+        **macOS:**
+        1. Press `Cmd + Shift + G` in Finder
+        2. Enter this path (replace `<USER>` with your username):
+        ```
+        /Users/<USER>/Library/Application Support/Slippi Launcher/netplay/Slippi Dolphin.app/Contents/Resources/Sys/Config/Profiles/GCPad
+        ```
+      </Tab>
+      
+      <Tab title="Vanilla Dolphin">
+        **Windows:**
+        ```
+        %userprofile%\Documents\Dolphin Emulator\Config\Profiles\GCPad\
+        ```
+
+        **Linux:**
+        ```
+        ~/.config/dolphin-emu/Profiles/GCPad/
+        ```
+
+        **macOS:**
+        ```
+        ~/Library/Application Support/Dolphin/Config/Profiles/GCPad/
+        ```
+      </Tab>
+    </Tabs>
+
+    <Note>
+    If the `Profiles/GCPad/` directory doesn't exist, create it manually.
+    </Note>
+  </Step>
+  
+  <Step title="Copy the profile file">
+    Copy the appropriate `.ini` file from the HayBox `dolphin/` folder to your Dolphin profiles directory.
+
+    **Example (Windows with Slippi + Pico controller):**
+    1. Copy `HayBox_XInput.ini`
+    2. Paste to `%appdata%\Slippi Launcher\netplay\User\Config\Profiles\GCPad\`
+  </Step>
+  
+  <Step title="Open Dolphin controller configuration">
+    1. Launch Dolphin/Slippi
+    2. Go to **Controllers** (or **Options → Controller Settings**)
+    3. Set Port 1 to **Standard Controller**
+    4. Click **Configure** for Port 1
+  </Step>
+  
+  <Step title="Load the HayBox profile">
+    1. Plug in your HayBox controller
+    2. In the controller configuration window, click **Refresh** next to the Device dropdown
+    3. Click the **Profile** dropdown at the top
+    4. Select your HayBox profile (e.g., `HayBox_XInput` or `HayBox_DInput`)
+    5. Click **Load** (NOT Save)
+    6. Verify the correct device is selected in the **Device** dropdown
+    7. Click **Close**
+  </Step>
+</Steps>
+
+<Warning>
+Make sure to click **Load** and not **Save**. Clicking Save would overwrite the profile with your current settings.
+</Warning>
+
+## Profile Differences by Backend
+
+### XInput Profiles (Pico only)
+
+**Backend:** XInput (default on Pico)
+
+**Characteristics:**
+- Uses XInput device mapping
+- Better compatibility with Windows
+- Native analog stick support
+- More reliable button detection
+
+**Usage:**
+```cpp
+// Automatically selected on Pico USB connection
+XInputBackend *backend = new XInputBackend(
+    inputs, input_sources, input_source_count
+);
+```
+
+### DInput Profiles
+
+**Backend:** DInput
+
+**Characteristics:**
+- Uses DirectInput device mapping
+- Required for Arduino devices
+- Works on Pico when forced (hold Z on plugin)
+- Required for keyboard modes
+
+**Usage:**
+```cpp
+// Arduino: Automatic on USB
+// Pico: Hold Z on plugin to force
+DInputBackend *backend = new DInputBackend(
+    inputs, input_sources, input_source_count
+);
+```
+
+## Verifying Your Setup
+
+<Steps>
+  <Step title="Test in controller config">
+    In Dolphin's controller configuration:
+    1. Press buttons on your HayBox
+    2. Verify the corresponding inputs light up in Dolphin
+    3. Test analog stick directions
+  </Step>
+  
+  <Step title="Test in-game">
+    Launch Melee or your game:
+    1. Test movement (analog stick)
+    2. Test all buttons (A, B, Z, L, R, Start)
+    3. Test c-stick directions
+  </Step>
+  
+  <Step title="Verify correct profile is loaded">
+    Common signs you're using the wrong profile:
+    - Buttons mapped incorrectly
+    - Analog sticks not working properly
+    - Missing inputs
+    - Inverted directions
+  </Step>
+</Steps>
+
+## Multiple Controllers
+
+To set up multiple HayBox controllers:
+
+<Steps>
+  <Step title="Configure Port 1">
+    Follow the installation instructions for Port 1.
+  </Step>
+  
+  <Step title="Repeat for additional ports">
+    1. Set Port 2/3/4 to **Standard Controller**
+    2. Click **Configure** for that port
+    3. Load the same HayBox profile
+    4. Select a different device from the dropdown
+  </Step>
+  
+  <Step title="Test each controller">
+    Make sure each controller controls only its assigned port.
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Profile not appearing in dropdown">
+    **Solution:**
+    1. Verify the .ini file is in the correct directory
+    2. Check that the directory path is correct for your OS and Dolphin version
+    3. Restart Dolphin after copying the file
+    4. Make sure you created the `Profiles/GCPad/` folders if they didn't exist
+  </Accordion>
+
+  <Accordion title="Controller not detected">
+    **For Pico (XInput):**
+    - Make sure you're NOT holding Z on plugin (forces DInput)
+    - Verify XInput profile is loaded, not DInput
+    - Try unplugging and replugging
+
+    **For Arduino (DInput):**
+    - Verify USB connection is working
+    - Try a different USB port
+    - Check Device Manager (Windows) to verify it appears
+    
+    **For macOS:**
+    - Hold Z on plugin to force DInput mode
+    - Use the macOS DInput profile
+    - Note: macOS support is limited and unreliable
+  </Accordion>
+
+  <Accordion title="Wrong buttons mapping">
+    **You loaded the wrong profile.** 
+
+    Make sure:
+    - Pico/RP2040 controllers use XInput profile (or DInput_Linux on Linux)
+    - Arduino controllers use DInput profile
+    - Linux users use the _Linux versions
+    - macOS users use the _macOS version (DInput only)
+  </Accordion>
+
+  <Accordion title="Analog sticks not working properly">
+    **Check your backend:**
+    1. **Pico:** Should be using XInput by default
+       - If you held Z on plugin, you forced DInput mode
+       - Unplug and replug without holding Z
+    2. **Arduino:** Uses DInput automatically
+       - Verify DInput profile is loaded
+    
+    **Verify deadzone settings:**
+    - In Dolphin controller config, check analog stick calibration
+    - Default settings usually work fine
+  </Accordion>
+
+  <Accordion title="Slippi says 'adapter not detected'">
+    This usually means:
+    1. Native GCC adapter support is enabled (disable it)
+    2. Wrong controller profile loaded
+    3. Need to restart Dolphin after plugging in controller
+
+    **Solution:**
+    - Go to **Options → Controller Settings**
+    - Uncheck **Enable Native GCC Adapter Support**
+    - Restart Slippi
+    - Reconfigure Port 1 with HayBox profile
+  </Accordion>
+
+  <Accordion title="Works in Dolphin config but not in-game">
+    **Common causes:**
+    1. Wrong device selected in dropdown
+    2. Background input disabled
+    3. Profile wasn't saved after loading
+
+    **Solution:**
+    1. Go back to controller config
+    2. Verify correct device is selected
+    3. Verify correct profile is loaded
+    4. Click Configure → Load profile again if needed
+  </Accordion>
+</AccordionGroup>
+
+## Advanced Configuration
+
+### Custom Button Mappings
+
+If you need to customize button mappings:
+
+1. Load the HayBox profile first
+2. Modify individual button mappings as needed
+3. Save under a new profile name (don't overwrite HayBox profile)
+4. Use your custom profile going forward
+
+### Multiple Game Profiles
+
+You can create game-specific profiles:
+
+1. Load the base HayBox profile
+2. Make game-specific adjustments
+3. Save as `HayBox_Melee.ini`, `HayBox_PM.ini`, etc.
+4. Switch profiles when switching games
+
+### Netplay Considerations
+
+<Info>
+For netplay, all players should use controllers with similar response times to ensure fair gameplay.
+</Info>
+
+- HayBox on Pico has very low latency
+- HayBox on Arduino has slightly higher latency but still excellent
+- Mixing HayBox with other controllers is generally fine
+- Communicate with your opponents about setup
+
+## Profile File Contents
+
+The .ini files contain mappings like:
+
+```ini
+[Profile]
+Device = XInput/0/Gamepad
+Buttons/A = `Button A`
+Buttons/B = `Button B`
+Buttons/X = `Button X`
+# ... etc
+Main Stick/Up = `Axis Y+`
+Main Stick/Down = `Axis Y-`
+# ... etc
+```
+
+You can manually edit these if needed, but loading the provided profiles is recommended.

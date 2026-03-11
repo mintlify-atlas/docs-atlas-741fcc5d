@@ -1,0 +1,268 @@
+---
+title: Installation
+description: Install pre-built HayBox firmware on your controller
+---
+
+This guide covers installing pre-built HayBox firmware with default pin mappings and configuration. If you need to customize the firmware, see [Building from Source](/building-from-source).
+
+## Choose Your Hardware Config
+
+<Steps>
+  <Step title="Browse available configs">
+    HayBox includes pre-built configurations for many popular controllers:
+    
+    <CardGroup cols={2}>
+      <Card title="RP2040/Pico Boards" icon="microchip">
+        - `pico` - Generic Raspberry Pi Pico
+        - `b0xx_r4` - B0XX R4 (Pico-based)
+        - `c53` - Crane's Model C≤53
+        - `schism` - Schism controller
+      </Card>
+      
+      <Card title="Arduino/AVR Boards" icon="microchip">
+        - `b0xx_r1` - B0XX R1 (Leonardo)
+        - `b0xx_r2` - B0XX R2 (Leonardo)
+        - `lbx` - LBX controller
+        - `gccpcb1` / `gccpcb2` - Crane's GCCPCB
+        - `gccmx` - Crane's GCCMX
+        - `smashbox` - Smash Box
+        - `htangl_v1` - HayBox TANGL v1
+      </Card>
+    </CardGroup>
+    
+    You can view the full config files in the [`config/` directory](https://github.com/JonnyHaystack/HayBox/tree/master/config) of the repository.
+  </Step>
+
+  <Step title="Download firmware">
+    Choose your download source:
+    
+    **Stable Release (Recommended)**
+    
+    Download from the [latest HayBox release](https://github.com/JonnyHaystack/HayBox/releases) on GitHub.
+    
+    **Development Build (Unstable)**
+    
+    For the latest features:
+    1. Go to [HayBox GitHub Actions](https://github.com/JonnyHaystack/HayBox/actions)
+    2. Click on a recent successful workflow run
+    3. Download the artifact for your hardware config
+    
+    <Warning>
+      Development builds may contain bugs or incomplete features. Use stable releases for tournament play.
+    </Warning>
+  </Step>
+</Steps>
+
+## Flash Firmware
+
+### RP2040/Pico (.uf2 files)
+
+<Steps>
+  <Step title="Enter bootsel mode">
+    Put your Pico-based controller into bootsel mode:
+    
+    **First time installation:**
+    - Hold the BOOTSEL button on the Pico while plugging in the USB cable
+    
+    **With HayBox already installed:**
+    - Hold RT2 (C-Down) while plugging in the USB cable
+    
+    A drive named `RPI-RP2` should appear on your computer.
+  </Step>
+
+  <Step title="Copy firmware file">
+    Drag and drop the `.uf2` firmware file onto the `RPI-RP2` drive.
+    
+    The controller will automatically reboot with the new firmware once the file is copied.
+  </Step>
+
+  <Step title="Verify installation">
+    After the drive disappears:
+    - The onboard LED should turn on
+    - The controller should be detected by your computer/console
+    - Test button inputs in your game or input viewer
+  </Step>
+</Steps>
+
+<Tip>
+  The Pico will automatically reboot after flashing. No need to unplug it manually.
+</Tip>
+
+### Arduino/AVR (.hex files)
+
+<Steps>
+  <Step title="Install QMK Toolbox">
+    Download and install [QMK Toolbox](https://github.com/qmk/qmk_toolbox) for your operating system:
+    - Windows: `qmk_toolbox.exe`
+    - macOS: `QMK.Toolbox.app.zip`
+    - Linux: `qmk_toolbox.pkg.tar.zst` (or use `avrdude` directly)
+  </Step>
+
+  <Step title="Prepare controller">
+    1. Launch QMK Toolbox
+    2. Click "Open" and select your `.hex` firmware file
+    3. Plug in your controller via USB
+    4. The controller should appear in the device list
+    
+    <Note>
+      If your controller doesn't appear, you may need to install drivers. QMK Toolbox can help install the appropriate drivers.
+    </Note>
+  </Step>
+
+  <Step title="Flash firmware">
+    1. Click the "Flash" button in QMK Toolbox
+    2. Wait for the flashing process to complete
+    3. The log should show "avrdude done. Thank you."
+    
+    <CodeGroup>
+    ```bash Terminal (Alternative)
+    # Using avrdude directly on Linux
+    avrdude -p atmega32u4 -c avr109 -U flash:w:firmware.hex:i -P /dev/ttyACM0
+    ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Test controller">
+    Unplug and replug the controller, then verify:
+    - Controller is recognized by your system
+    - Buttons respond correctly
+    - Mode switching works as expected
+  </Step>
+</Steps>
+
+## Configuration by Hardware Type
+
+### Pin Mappings
+
+Each config includes default pin mappings in `config/<environment>/config.cpp`. Here's an example from the generic Pico config:
+
+<CodeGroup>
+```cpp config/pico/config.cpp
+GpioButtonMapping button_mappings[] = {
+    { BTN_LF1, 2  },  // Left face button 1 -> GPIO 2
+    { BTN_LF2, 3  },  // Left face button 2 -> GPIO 3
+    { BTN_LF3, 4  },  // Left face button 3 -> GPIO 4
+    { BTN_LF4, 5  },  // Left face button 4 -> GPIO 5
+    { BTN_LF5, 1  },  // Left face button 5 -> GPIO 1
+    
+    { BTN_LT1, 6  },  // Left trigger 1 (Mod X) -> GPIO 6
+    { BTN_LT2, 7  },  // Left trigger 2 (Mod Y) -> GPIO 7
+    
+    { BTN_MB1, 0  },  // Middle button 1 (Start) -> GPIO 0
+    { BTN_MB2, 10 },  // Middle button 2 -> GPIO 10
+    { BTN_MB3, 11 },  // Middle button 3 -> GPIO 11
+    
+    { BTN_RT1, 14 },  // Right trigger 1 (A) -> GPIO 14
+    { BTN_RT2, 15 },  // Right trigger 2 (C-Down) -> GPIO 15
+    { BTN_RT3, 13 },  // Right trigger 3 (C-Left) -> GPIO 13
+    { BTN_RT4, 12 },  // Right trigger 4 (C-Up) -> GPIO 12
+    { BTN_RT5, 16 },  // Right trigger 5 (C-Right) -> GPIO 16
+    
+    { BTN_RF1, 26 },  // Right face button 1 (B) -> GPIO 26
+    { BTN_RF2, 21 },  // Right face button 2 (X) -> GPIO 21
+    { BTN_RF3, 19 },  // Right face button 3 (Z) -> GPIO 19
+    { BTN_RF4, 17 },  // Right face button 4 (R) -> GPIO 17
+    
+    { BTN_RF5, 27 },  // Lightshield buttons
+    { BTN_RF6, 22 },
+    { BTN_RF7, 20 },
+    { BTN_RF8, 18 },
+};
+```
+
+```cpp config/b0xx_r1/config.cpp
+// B0XX R1 uses Arduino Leonardo (ATmega32U4)
+// Pin mappings optimized for B0XX R1 PCB layout
+GpioButtonMapping button_mappings[] = {
+    { BTN_LF1, 9  },
+    { BTN_LF2, 8  },
+    { BTN_LF3, 7  },
+    { BTN_LF4, 6  },
+    
+    { BTN_LT1, 10 },
+    { BTN_LT2, 11 },
+    
+    { BTN_MB1, 12 },
+    
+    { BTN_RT1, 28 },
+    { BTN_RT2, 27 },
+    // ... additional mappings
+};
+```
+</CodeGroup>
+
+<Note>
+  If your controller has a different pinout than the existing configs, you'll need to [build from source](/building-from-source) with custom pin mappings.
+</Note>
+
+## Default Button Holds
+
+HayBox uses button holds on plugin to access special functions:
+
+### Special Boot Modes
+
+| Button Hold | Function | Platform |
+|-------------|----------|----------|
+| **MB1** (Start) | Enter config mode | Pico only |
+| **RT2** (C-Down) | Reboot to bootsel mode | Pico only |
+| **RF1** (B) | Switch to Brook board passthrough | GCCPCB2, GCCMX, B0XX R2, LBX |
+
+### Communication Backend Selection
+
+On **Pico/RP2040**, the backend is auto-detected:
+- USB connection defaults to **XInput** (best for PC games)
+- GameCube/Nintendo 64 console detected automatically
+
+Manual backend selection:
+
+| Button Hold | Backend |
+|-------------|----------|
+| **RF2** (X) | Nintendo Switch USB mode |
+| **RF3** (Z) | DInput mode (for games without XInput) |
+
+On **Arduino/AVR**:
+- USB connection uses **DInput**
+- Defaults to GameCube backend for console
+
+| Button Hold | Backend |
+|-------------|----------|
+| **RT1** (A) | GameCube (polling rate fix disabled) |
+| **RT3** (C-Left) | Nintendo 64 backend |
+
+### Game Mode Selection
+
+Switch modes on the fly (without unplugging):
+
+| Button Combination | Game Mode |
+|-------------------|----------|
+| Start + Mod X + L | Melee mode (default) |
+| Start + Mod X + Left | Project M/Project+ |
+| Start + Mod X + Down | Ultimate mode |
+| Start + Mod X + Right | FGC mode (Hitbox layout) |
+| Start + Mod X + B | Rivals of Aether |
+| Start + Mod X + R | Rivals of Aether 2 |
+| Start + Mod Y + L | Keyboard mode (DInput only) |
+
+<Tip>
+  Mode switching works on PC without unplugging. On console, you'll typically restart the console when switching games anyway.
+</Tip>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Building from Source" icon="code" href="/building-from-source">
+    Customize pin mappings, button functions, and game modes
+  </Card>
+  
+  <Card title="Dolphin Setup" icon="gamepad">
+    Configure controller profiles for Slippi and Dolphin
+  </Card>
+  
+  <Card title="Customization" icon="sliders">
+    Learn about SOCD modes, modifiers, and input modes
+  </Card>
+  
+  <Card title="Troubleshooting" icon="wrench">
+    Solve common issues with adapters and consoles
+  </Card>
+</CardGroup>

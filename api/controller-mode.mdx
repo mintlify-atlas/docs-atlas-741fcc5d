@@ -1,0 +1,350 @@
+---
+title: "ControllerMode"
+description: "Base class for implementing game controller input modes in HayBox firmware"
+---
+
+## Overview
+
+`ControllerMode` is an abstract base class that extends `InputMode` to provide controller-specific functionality. It handles the conversion of physical button inputs into analog stick positions and digital button outputs for game controllers.
+
+## Class Definition
+
+```cpp
+class ControllerMode : public InputMode {
+  public:
+    ControllerMode();
+    void UpdateOutputs(const InputState &inputs, OutputState &outputs);
+    void ResetDirections();
+    virtual void UpdateDirections(
+        bool lsLeft,
+        bool lsRight,
+        bool lsDown,
+        bool lsUp,
+        bool rsLeft,
+        bool rsRight,
+        bool rsDown,
+        bool rsUp,
+        uint8_t analogStickMin,
+        uint8_t analogStickNeutral,
+        uint8_t analogStickMax,
+        OutputState &outputs
+    );
+
+  protected:
+    StickDirections directions;
+
+  private:
+    virtual void UpdateDigitalOutputs(const InputState &inputs, OutputState &outputs) = 0;
+    virtual void UpdateAnalogOutputs(const InputState &inputs, OutputState &outputs) = 0;
+};
+```
+
+## Inheritance
+
+<ResponseField name="Base Class" type="InputMode">
+  Inherits from `InputMode`, which provides configuration management, SOCD handling, and button remapping functionality.
+</ResponseField>
+
+## Constructor
+
+### ControllerMode()
+
+```cpp
+ControllerMode::ControllerMode() : InputMode()
+```
+
+Initializes a new controller mode instance and resets the directional state.
+
+**Implementation Details:**
+- Calls the parent `InputMode` constructor
+- Calls `ResetDirections()` to initialize stick direction state
+
+## Public Methods
+
+### UpdateOutputs
+
+```cpp
+void UpdateOutputs(const InputState &inputs, OutputState &outputs)
+```
+
+Processes input state and updates output state with controller button and analog stick values.
+
+<ParamField path="inputs" type="const InputState&">
+  Reference to the current input state containing all physical button presses
+</ParamField>
+
+<ParamField path="outputs" type="OutputState&">
+  Reference to the output state to be modified with controller outputs
+</ParamField>
+
+**Processing Order:**
+1. Creates a copy of inputs for remapping
+2. Applies button remapping via `HandleRemap()`
+3. Applies SOCD (Simultaneous Opposite Cardinal Direction) resolution via `HandleSocd()`
+4. Calls `UpdateDigitalOutputs()` to set button states
+5. Calls `UpdateAnalogOutputs()` to set analog stick positions
+
+### ResetDirections
+
+```cpp
+void ResetDirections()
+```
+
+Resets the internal `directions` struct to neutral state.
+
+**Behavior:**
+- Sets all directional flags to `false`
+- Sets all coordinate values (`x`, `y`, `cx`, `cy`) to `0`
+
+### UpdateDirections
+
+```cpp
+virtual void UpdateDirections(
+    bool lsLeft,
+    bool lsRight,
+    bool lsDown,
+    bool lsUp,
+    bool rsLeft,
+    bool rsRight,
+    bool rsDown,
+    bool rsUp,
+    uint8_t analogStickMin,
+    uint8_t analogStickNeutral,
+    uint8_t analogStickMax,
+    OutputState &outputs
+)
+```
+
+Calculates stick directions and updates analog stick outputs based on directional inputs.
+
+<ParamField path="lsLeft" type="bool">
+  Left stick left direction active
+</ParamField>
+
+<ParamField path="lsRight" type="bool">
+  Left stick right direction active
+</ParamField>
+
+<ParamField path="lsDown" type="bool">
+  Left stick down direction active
+</ParamField>
+
+<ParamField path="lsUp" type="bool">
+  Left stick up direction active
+</ParamField>
+
+<ParamField path="rsLeft" type="bool">
+  Right stick (C-stick) left direction active
+</ParamField>
+
+<ParamField path="rsRight" type="bool">
+  Right stick (C-stick) right direction active
+</ParamField>
+
+<ParamField path="rsDown" type="bool">
+  Right stick (C-stick) down direction active
+</ParamField>
+
+<ParamField path="rsUp" type="bool">
+  Right stick (C-stick) up direction active
+</ParamField>
+
+<ParamField path="analogStickMin" type="uint8_t">
+  Minimum analog value (typically 48 for GameCube)
+</ParamField>
+
+<ParamField path="analogStickNeutral" type="uint8_t">
+  Neutral/center analog value (typically 128)
+</ParamField>
+
+<ParamField path="analogStickMax" type="uint8_t">
+  Maximum analog value (typically 208 for GameCube)
+</ParamField>
+
+<ParamField path="outputs" type="OutputState&">
+  Output state to update with calculated stick positions
+</ParamField>
+
+**Behavior:**
+- Resets directions to neutral state
+- Sets stick outputs to neutral position
+- Calculates coordinate flags (`horizontal`, `vertical`, `diagonal`)
+- Sets coordinate values (`x`, `y`, `cx`, `cy`) to -1, 0, or 1
+- Updates `outputs.leftStickX`, `outputs.leftStickY`, `outputs.rightStickX`, `outputs.rightStickY`
+
+<Note>
+  This method is virtual and can be overridden by derived classes to implement custom directional behavior.
+</Note>
+
+## Protected Members
+
+### directions
+
+```cpp
+StickDirections directions;
+```
+
+Tracks the current state of analog stick directions.
+
+<ResponseField name="horizontal" type="bool">
+  True if left stick has horizontal input
+</ResponseField>
+
+<ResponseField name="vertical" type="bool">
+  True if left stick has vertical input
+</ResponseField>
+
+<ResponseField name="diagonal" type="bool">
+  True if left stick has both horizontal and vertical input
+</ResponseField>
+
+<ResponseField name="x" type="int8_t">
+  Left stick horizontal direction: -1 (left), 0 (neutral), 1 (right)
+</ResponseField>
+
+<ResponseField name="y" type="int8_t">
+  Left stick vertical direction: -1 (down), 0 (neutral), 1 (up)
+</ResponseField>
+
+<ResponseField name="cx" type="int8_t">
+  Right stick horizontal direction: -1 (left), 0 (neutral), 1 (right)
+</ResponseField>
+
+<ResponseField name="cy" type="int8_t">
+  Right stick vertical direction: -1 (down), 0 (neutral), 1 (up)
+</ResponseField>
+
+## Pure Virtual Methods
+
+These methods must be implemented by any concrete class derived from `ControllerMode`.
+
+### UpdateDigitalOutputs
+
+```cpp
+virtual void UpdateDigitalOutputs(const InputState &inputs, OutputState &outputs) = 0
+```
+
+Implement this method to map physical button inputs to controller button outputs (A, B, X, Y, triggers, etc.).
+
+<ParamField path="inputs" type="const InputState&">
+  Remapped and SOCD-resolved input state
+</ParamField>
+
+<ParamField path="outputs" type="OutputState&">
+  Output state to update with button presses
+</ParamField>
+
+### UpdateAnalogOutputs
+
+```cpp
+virtual void UpdateAnalogOutputs(const InputState &inputs, OutputState &outputs) = 0
+```
+
+Implement this method to calculate analog stick positions and trigger values based on inputs.
+
+<ParamField path="inputs" type="const InputState&">
+  Remapped and SOCD-resolved input state
+</ParamField>
+
+<ParamField path="outputs" type="OutputState&">
+  Output state to update with analog values
+</ParamField>
+
+## Usage Example
+
+Here's how the `Melee20Button` mode implements `ControllerMode`:
+
+```cpp
+class Melee20Button : public ControllerMode {
+  public:
+    Melee20Button();
+    void SetConfig(GameModeConfig &config, const MeleeOptions options);
+
+  protected:
+    void UpdateDigitalOutputs(const InputState &inputs, OutputState &outputs);
+    void UpdateAnalogOutputs(const InputState &inputs, OutputState &outputs);
+
+  private:
+    MeleeOptions _options;
+    bool _horizontal_socd;
+    void HandleSocd(InputState &inputs);
+};
+```
+
+### Digital Output Implementation
+
+```cpp
+void Melee20Button::UpdateDigitalOutputs(const InputState &inputs, OutputState &outputs) {
+    outputs.a = inputs.rt1;
+    outputs.b = inputs.rf1;
+    outputs.x = inputs.rf2;
+    outputs.y = inputs.rf6;
+    outputs.buttonR = inputs.rf3;
+    outputs.triggerLDigital = inputs.lf4;
+    outputs.triggerRDigital = inputs.rf5;
+    outputs.start = inputs.mb1;
+
+    // D-Pad layer activation
+    if (inputs.lt1 && inputs.lt2) {
+        outputs.dpadUp = inputs.rt4;
+        outputs.dpadDown = inputs.rt2;
+        outputs.dpadLeft = inputs.rt3;
+        outputs.dpadRight = inputs.rt5;
+    }
+}
+```
+
+### Analog Output Implementation
+
+```cpp
+void Melee20Button::UpdateAnalogOutputs(const InputState &inputs, OutputState &outputs) {
+    // Calculate base stick directions
+    UpdateDirections(
+        inputs.lf3, // Left
+        inputs.lf1, // Right
+        inputs.lf2, // Down
+        inputs.rf4, // Up
+        inputs.rt3, // C-Left
+        inputs.rt5, // C-Right
+        inputs.rt2, // C-Down
+        inputs.rt4, // C-Up
+        ANALOG_STICK_MIN,      // 48
+        ANALOG_STICK_NEUTRAL,  // 128
+        ANALOG_STICK_MAX,      // 208
+        outputs
+    );
+
+    // Apply modifiers based on directions struct
+    if (directions.diagonal) {
+        outputs.leftStickX = 128 + (directions.x * 56);
+        outputs.leftStickY = 128 + (directions.y * 56);
+    }
+
+    // Modifier X for custom angles
+    if (inputs.lt1 && directions.horizontal) {
+        outputs.leftStickX = 128 + (directions.x * 53);
+    }
+}
+```
+
+## Best Practices
+
+<Warning>
+  Always call `UpdateDirections()` in your `UpdateAnalogOutputs()` implementation before applying modifiers. This ensures the `directions` struct is properly initialized.
+</Warning>
+
+<Note>
+  The `directions` struct provides a convenient way to check for diagonal inputs and apply different coordinate values based on the direction quadrant.
+</Note>
+
+## Related Types
+
+- **InputState**: Defined in `include/core/state.hpp` - contains all button states
+- **OutputState**: Defined in `include/core/state.hpp` - contains controller output structure  
+- **InputMode**: Parent class providing config, SOCD, and remapping functionality
+
+## See Also
+
+- [KeyboardMode](/api/keyboard-mode) - For implementing keyboard input modes
+- [InputSource](/api/input-source) - For reading physical inputs
+- [CommunicationBackend](/api/communication-backend) - For sending outputs to the host device

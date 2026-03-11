@@ -1,0 +1,268 @@
+---
+title: Communication Backends
+description: Different protocols HayBox uses to communicate with consoles and PCs
+icon: tower-broadcast
+---
+
+HayBox supports multiple communication backends that determine how your controller communicates with consoles or PCs. Each backend implements a different protocol, and some can even be used simultaneously.
+
+## Available Backends
+
+### XInput (Default for Pico USB)
+
+<Info>
+XInput is the default USB backend for Pico/RP2040 devices and provides the best PC gaming experience.
+</Info>
+
+**Platform:** Pico/RP2040 only
+
+**Use cases:**
+- Modern PC games with native controller support
+- Steam games
+- Windows gaming in general
+
+**Advantages:**
+- Plug-and-play compatibility with most PC games
+- No driver installation required on Windows
+- Full analog stick and trigger support
+- Native rumble support (if implemented)
+
+**Selection:**
+- Automatically selected on USB connection (Pico)
+- Cannot be manually forced on Arduino
+
+### DInput
+
+**Platform:** All devices (Pico and Arduino)
+
+**Use cases:**
+- Legacy PC games that don't support XInput
+- Dolphin Emulator on Arduino devices
+- Games that explicitly require DInput
+- **Required for keyboard modes**
+
+**Selection:**
+- **Pico:** Hold **RF3 (Z)** on plugin
+- **Arduino:** Automatic when USB is detected
+
+<Note>
+DInput is the only backend that supports keyboard modes. To use any keyboard mode, you must be in DInput mode.
+</Note>
+
+**Keyboard Mode Support:**
+```cpp
+// Keyboard modes only work with DInput
+if (backend->BackendId() != COMMS_BACKEND_DINPUT) {
+    return; // Keyboard mode activation fails
+}
+```
+
+### GameCube Console
+
+**Platform:** All devices
+
+**Use cases:**
+- GameCube console
+- GameCube controller adapters (Mayflash, official, etc.)
+- Dolphin with native GCC support
+
+**Automatic Detection:**
+- Pico devices automatically detect GameCube console connection
+- Arduino devices default to GameCube when no USB detected
+
+**Manual Selection (Arduino only):**
+- Hold **RT1 (A)** on plugin for GameCube mode with polling rate fix disabled (required for most adapters)
+
+**Polling Rate:**
+```cpp
+// Arduino example - 125Hz polling for console
+GamecubeBackend *backend = new GamecubeBackend(
+    inputs, input_sources, input_source_count, 
+    pinout.joybus_data, 
+    125 // Polling rate in Hz
+);
+```
+
+<Warning>
+Arduino-based controllers without a boost circuit require 5V power. For Mayflash adapter, both USB cables must be plugged in. On console, the rumble line must be intact.
+</Warning>
+
+### Nintendo 64 Console
+
+**Platform:** All devices
+
+**Use cases:**
+- Nintendo 64 console
+- N64 emulators with native controller support
+
+**Selection:**
+- **Pico:** Automatically detected when connected to N64 console
+- **Arduino:** Hold **RT3 (C-Left)** on plugin
+
+**Polling Rate:**
+- N64 runs at 60Hz polling rate
+- Can be configured similarly to GameCube backend on Arduino
+
+### Nintendo Switch USB
+
+**Platform:** Pico/RP2040 only
+
+**Use cases:**
+- Nintendo Switch console via USB
+- Super Smash Bros. Ultimate
+
+**Selection:**
+- Hold **RF2 (X)** on plugin
+- Automatically sets initial game mode to Ultimate mode
+
+**Features:**
+- Emulates Pro Controller
+- Full support for all Switch buttons and sticks
+- Optimized for Smash Ultimate
+
+### B0XX Input Viewer
+
+**Platform:** All devices
+
+**Use cases:**
+- Streaming and content creation
+- Practice and input analysis
+- Visualizing inputs in real-time
+
+**Automatic Activation:**
+- Automatically enabled as secondary backend when using DInput or XInput
+- Runs simultaneously with the primary backend
+
+**Implementation:**
+```cpp
+switch (backend_id) {
+    case COMMS_BACKEND_DINPUT:
+    case COMMS_BACKEND_XINPUT:
+        backend_count = 2;
+        backends = new CommunicationBackend *[backend_count] {
+            primary_backend, 
+            new B0XXInputViewer(inputs, input_sources, input_source_count)
+        };
+        break;
+}
+```
+
+## Backend Detection and Selection
+
+<Steps>
+  <Step title="Check Button Holds">
+    On plugin, HayBox first checks for button hold combinations to see if a specific backend is requested.
+  </Step>
+  
+  <Step title="Auto-detect Console">
+    If no button hold matches, HayBox attempts to detect if connected to a console:
+    - GameCube console (via data line detection)
+    - N64 console (via data line detection)
+  </Step>
+  
+  <Step title="Default to USB Backend">
+    If no console detected, uses the default USB backend:
+    - **Pico:** XInput (configurable)
+    - **Arduino:** DInput
+  </Step>
+</Steps>
+
+## Platform-Specific Differences
+
+<Tabs>
+  <Tab title="Pico/RP2040">
+    ### Advantages
+    - Automatic console detection
+    - XInput support for better PC compatibility
+    - No polling rate configuration needed
+    - Can switch between backends by unplugging and replugging
+    - More backends available (Switch, XInput)
+
+    ### Default USB Backend
+    XInput (best for PC gaming)
+
+    ### Available Backends
+    - XInput
+    - DInput
+    - GameCube
+    - N64
+    - Nintendo Switch
+    - NES (experimental)
+    - SNES (experimental)
+    - Configurator (web-based config)
+  </Tab>
+  
+  <Tab title="Arduino/AVR">
+    ### Characteristics
+    - Manual backend selection via button holds
+    - DInput only for USB
+    - Polling rate must be configured in code
+    - Limited processing power affects available backends
+
+    ### Default USB Backend
+    DInput
+
+    ### Available Backends
+    - DInput
+    - GameCube
+    - N64
+
+    ### Polling Rate Configuration Required
+    ```cpp
+    // Must specify polling rate for console backends
+    GamecubeBackend(inputs, sources, count, pin, 125);
+    N64Backend(inputs, sources, count, pin, 60);
+    ```
+  </Tab>
+</Tabs>
+
+## Multiple Backends Simultaneously
+
+HayBox supports running multiple communication backends at the same time:
+
+```cpp
+// Primary backend + Input viewer
+backends = new CommunicationBackend *[2] {
+    primary_backend,
+    new B0XXInputViewer(inputs, input_sources, input_source_count)
+};
+
+// Both backends receive reports each iteration
+for (size_t i = 0; i < backend_count; i++) {
+    backends[i]->SendReport();
+}
+```
+
+This allows you to, for example:
+- Play on PC while streaming with input viewer
+- Send inputs to multiple outputs simultaneously
+- Debug input behavior while playing
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Controller not working with GameCube adapter">
+    If using an official adapter with Arduino, hold **A (RT1)** on plugin to disable polling rate optimization.
+
+    For Mayflash adapters:
+    - Arduino: Requires both USB cables plugged in for 5V power
+    - Pico: Works with single USB cable (3.3V native)
+  </Accordion>
+
+  <Accordion title="Wrong backend selected">
+    The backend is selected on plugin. To change backends:
+    1. Unplug the controller
+    2. Hold the appropriate button combination (see above)
+    3. Plug in the controller while holding the button(s)
+  </Accordion>
+
+  <Accordion title="Keyboard mode not working">
+    Keyboard modes only work with the **DInput** backend. If using Pico:
+    1. Hold **RF3 (Z)** on plugin to force DInput mode
+    2. Then activate keyboard mode using the mode selection combination
+  </Accordion>
+
+  <Accordion title="XInput not available on Arduino">
+    XInput is only available on Pico/RP2040 devices. Arduino/AVR devices are limited to DInput for USB communication due to hardware constraints.
+  </Accordion>
+</AccordionGroup>

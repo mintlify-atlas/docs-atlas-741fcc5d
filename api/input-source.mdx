@@ -1,0 +1,375 @@
+---
+title: "InputSource"
+description: "Abstract base class for reading physical input devices in HayBox firmware"
+---
+
+## Overview
+
+`InputSource` is an abstract base class that defines the interface for reading physical input devices such as buttons, switches, and external controllers. Implementations of this class handle the hardware-specific details of reading inputs and updating the shared `InputState` structure.
+
+## Class Definition
+
+```cpp
+class InputSource {
+  public:
+    InputSource();
+    virtual ~InputSource(){}
+    virtual InputScanSpeed ScanSpeed() = 0;
+    virtual void UpdateInputs(InputState &inputs) = 0;
+};
+```
+
+## Scan Speed Enumeration
+
+```cpp
+enum class InputScanSpeed {
+    SLOW,
+    MEDIUM,
+    FAST,
+};
+```
+
+The `InputScanSpeed` enum allows input sources to declare their optimal scanning frequency. This enables the communication backend to selectively scan inputs based on performance requirements.
+
+<ResponseField name="SLOW" type="InputScanSpeed">
+  For infrequently changing inputs (e.g., configuration switches, mode selectors)
+</ResponseField>
+
+<ResponseField name="MEDIUM" type="InputScanSpeed">
+  For inputs that change at moderate rates (e.g., analog sensors, external controllers)
+</ResponseField>
+
+<ResponseField name="FAST" type="InputScanSpeed">
+  For primary button inputs that require minimal latency (e.g., GPIO buttons, matrix switches)
+</ResponseField>
+
+## Constructor & Destructor
+
+### InputSource()
+
+```cpp
+InputSource::InputSource()
+```
+
+Default constructor. Typically used to initialize hardware-specific state in derived classes.
+
+### ~InputSource()
+
+```cpp
+virtual ~InputSource(){}
+```
+
+Virtual destructor to ensure proper cleanup of derived classes.
+
+## Pure Virtual Methods
+
+These methods must be implemented by any concrete class derived from `InputSource`.
+
+### ScanSpeed
+
+```cpp
+virtual InputScanSpeed ScanSpeed() = 0
+```
+
+Returns the recommended scan speed for this input source.
+
+**Returns:** An `InputScanSpeed` enum value indicating how frequently this input source should be scanned.
+
+**Usage:**
+The communication backend uses this to implement selective scanning:
+
+```cpp
+// Scan only FAST inputs in time-critical sections
+backend.ScanInputs(InputScanSpeed::FAST);
+
+// Scan all inputs periodically
+backend.ScanInputs();
+```
+
+### UpdateInputs
+
+```cpp
+virtual void UpdateInputs(InputState &inputs) = 0
+```
+
+Reads the current state of the physical input device and updates the input state structure.
+
+<ParamField path="inputs" type="InputState&">
+  Reference to the shared input state structure to update with current button states
+</ParamField>
+
+**Implementation Requirements:**
+- Read the current hardware state
+- Update the relevant fields in the `inputs` structure
+- Handle any necessary debouncing or filtering
+- Should be fast and non-blocking
+
+<Note>
+  Multiple input sources can write to the same `InputState` structure. Use bitwise OR operations to combine inputs without overwriting values from other sources.
+</Note>
+
+## Built-in Implementations
+
+HayBox includes several concrete implementations of `InputSource` for common input devices:
+
+### GpioButtonInput
+
+```cpp
+class GpioButtonInput : public InputSource {
+  public:
+    GpioButtonInput(const GpioButtonMapping *button_mappings, size_t button_count);
+    InputScanSpeed ScanSpeed();
+    void UpdateInputs(InputState &inputs);
+
+  protected:
+    const GpioButtonMapping *_button_mappings;
+    size_t _button_count;
+
+  private:
+    virtual void UpdateButtonState(InputState &inputs, size_t button_mapping_index, bool pressed);
+};
+```
+
+Reads buttons connected directly to GPIO pins.
+
+**Button Mapping Structure:**
+```cpp
+typedef struct {
+    Button button;  // Which button in InputState to update
+    uint pin;       // GPIO pin number
+} GpioButtonMapping;
+```
+
+### SwitchMatrixInput
+
+Reads buttons arranged in a matrix configuration (rows and columns). More efficient for large numbers of buttons.
+
+### DebouncedGpioButtonInput
+
+Extends `GpioButtonInput` with software debouncing to filter mechanical switch noise.
+
+### DebouncedSwitchMatrixInput
+
+Combines switch matrix scanning with debouncing.
+
+### NunchukInput
+
+Reads input from a Wii Nunchuk controller connected via I2C.
+
+### GamecubeControllerInput
+
+Reads input from a GameCube controller connected to a GPIO pin.
+
+### Pca9671Input
+
+Reads buttons from a PCA9671 I2C GPIO expander chip.
+
+## Usage Example
+
+### Creating a Simple GPIO Input Source
+
+```cpp
+#include "core/InputSource.hpp"
+#include "input/GpioButtonInput.hpp"
+
+// Define button mappings
+const GpioButtonMapping button_mappings[] = {
+    { .button = Button_LF1, .pin = 0 },
+    { .button = Button_LF2, .pin = 1 },
+    { .button = Button_LF3, .pin = 2 },
+    { .button = Button_LF4, .pin = 3 },
+    { .button = Button_RF1, .pin = 4 },
+    { .button = Button_RF2, .pin = 5 },
+    // ... more buttons
+};
+
+// Create input source
+GpioButtonInput gpio_input(
+    button_mappings,
+    sizeof(button_mappings) / sizeof(GpioButtonMapping)
+);
+```
+
+### Implementing a Custom Input Source
+
+```cpp
+class CustomSensorInput : public InputSource {
+  public:
+    CustomSensorInput(uint8_t i2c_address) : _address(i2c_address) {
+        // Initialize I2C hardware
+        initI2C();
+    }
+
+    InputScanSpeed ScanSpeed() override {
+        // Sensors typically don't need FAST scanning
+        return InputScanSpeed::MEDIUM;
+    }
+
+    void UpdateInputs(InputState &inputs) override {
+        // Read sensor data
+        uint16_t sensor_value = readSensor(_address);
+
+        // Map sensor value to button state
+        // For example, activate button when sensor exceeds threshold
+        if (sensor_value > THRESHOLD) {
+            inputs.mb1 = true;
+        }
+
+        // Or map to multiple buttons based on ranges
+        if (sensor_value > 1000) inputs.mb2 = true;
+        if (sensor_value > 2000) inputs.mb3 = true;
+    }
+
+  private:
+    uint8_t _address;
+    
+    void initI2C() {
+        // Hardware-specific I2C initialization
+    }
+
+    uint16_t readSensor(uint8_t addr) {
+        // Hardware-specific sensor reading
+        return 0;
+    }
+};
+```
+
+### Combining Multiple Input Sources
+
+```cpp
+// Create multiple input sources
+GpioButtonInput gpio_buttons(button_mappings, button_count);
+NunchukInput nunchuk(NUNCHUK_I2C_ADDRESS);
+CustomSensorInput sensor(SENSOR_I2C_ADDRESS);
+
+// Add to array
+InputSource *input_sources[] = {
+    &gpio_buttons,
+    &nunchuk,
+    &sensor,
+};
+
+// Pass to communication backend
+CommunicationBackend backend(
+    input_state,
+    input_sources,
+    sizeof(input_sources) / sizeof(InputSource *)
+);
+```
+
+## Selective Scanning
+
+The communication backend supports scanning input sources selectively based on their scan speed:
+
+```cpp
+void loop() {
+    // Scan FAST inputs every iteration for minimal latency
+    backend.ScanInputs(InputScanSpeed::FAST);
+
+    // Process outputs
+    backend.UpdateOutputs();
+    backend.SendReport();
+
+    // Scan MEDIUM and SLOW inputs less frequently
+    static uint32_t last_slow_scan = 0;
+    if (millis() - last_slow_scan > 100) {  // Every 100ms
+        backend.ScanInputs(InputScanSpeed::MEDIUM);
+        backend.ScanInputs(InputScanSpeed::SLOW);
+        last_slow_scan = millis();
+    }
+}
+```
+
+<Note>
+  Calling `backend.ScanInputs()` without parameters scans all input sources regardless of their scan speed.
+</Note>
+
+## Input State Structure
+
+The `InputState` structure contains all possible button states:
+
+```cpp
+typedef struct _InputState {
+    union {
+        uint64_t buttons = 0;
+        struct {
+            // Left front buttons (lf1-lf16)
+            bool lf1 : 1;
+            bool lf2 : 1;
+            // ... (lf3-lf16)
+            
+            // Right front buttons (rf1-rf16)
+            bool rf1 : 1;
+            bool rf2 : 1;
+            // ... (rf3-rf16)
+            
+            // Left top buttons (lt1-lt8)
+            bool lt1 : 1;
+            // ... (lt2-lt8)
+            
+            // Right top buttons (rt1-rt8)
+            bool rt1 : 1;
+            // ... (rt2-rt8)
+            
+            // Middle buttons (mb1-mb12)
+            bool mb1 : 1;
+            // ... (mb2-mb12)
+        };
+    };
+
+    // Nunchuk-specific inputs
+    union {
+        uint8_t nunchuk_buttons = 0;
+        struct {
+            bool nunchuk_connected : 1;
+            bool nunchuk_c : 1;
+            bool nunchuk_z : 1;
+        };
+    };
+    int8_t nunchuk_x = 0;
+    int8_t nunchuk_y = 0;
+} InputState;
+```
+
+## Best Practices
+
+<Warning>
+  Always use bitwise OR when setting button states if multiple input sources might affect the same button. Never use direct assignment unless you're certain no other input source will modify that button.
+</Warning>
+
+```cpp
+// Good: Combines with existing state
+inputs.lf1 |= gpio_read(PIN_1);
+
+// Bad: Overwrites other sources
+inputs.lf1 = gpio_read(PIN_1);
+```
+
+<Note>
+  Implement `UpdateInputs()` to be as fast as possible. Avoid blocking operations, delays, or excessive computation. This method is called every iteration of the main loop.
+</Note>
+
+<Note>
+  Return `InputScanSpeed::FAST` for primary button inputs that affect gameplay. Reserve `SLOW` for configuration inputs that rarely change.
+</Note>
+
+## Debouncing Considerations
+
+Mechanical switches require debouncing to filter bounce noise. You can implement debouncing in two ways:
+
+1. **Hardware debouncing**: Use capacitors on button inputs
+2. **Software debouncing**: Use HayBox's debounced input source classes
+
+```cpp
+// Without debouncing (for clean digital signals)
+GpioButtonInput gpio_input(button_mappings, button_count);
+
+// With software debouncing (for mechanical switches)
+DebouncedGpioButtonInput debounced_input(button_mappings, button_count);
+```
+
+## Related Classes
+
+- [CommunicationBackend](/api/communication-backend) - Manages input sources and scans inputs
+- [ControllerMode](/api/controller-mode) - Processes inputs into controller outputs
+- [KeyboardMode](/api/keyboard-mode) - Processes inputs into keyboard outputs

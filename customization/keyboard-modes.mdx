@@ -1,0 +1,414 @@
+---
+title: 'Creating Keyboard Modes'
+description: 'Learn how to create custom keyboard modes for HayBox firmware'
+icon: 'keyboard'
+---
+
+A `KeyboardMode` behaves as a standard USB keyboard and works with any device that supports keyboards. Keyboard modes are simpler than controller modes since they only deal with key presses.
+
+<Warning>
+Keyboard modes only work with the **DInput** communication backend. They are **not** available when using XInput.
+</Warning>
+
+## Class Structure
+
+Keyboard modes inherit from the `KeyboardMode` class and must implement one function:
+
+```cpp
+class CustomKeyboardMode : public KeyboardMode {
+  public:
+    CustomKeyboardMode();
+
+  private:
+    void UpdateKeys(const InputState &inputs);
+};
+```
+
+## The UpdateKeys() Function
+
+The `UpdateKeys()` function uses the `Press()` method to map button inputs to keyboard keys:
+
+```cpp
+void Press(uint8_t keycode, bool press);
+```
+
+- **keycode**: The HID keycode for the key to press
+- **press**: Boolean indicating whether the key should be pressed (true) or released (false)
+
+## Example: DefaultKeyboardMode
+
+Here's the complete implementation from HayBox:
+
+### Header File
+
+```cpp
+#ifndef _MODES_DEFAULTKEYBOARDMODE_HPP
+#define _MODES_DEFAULTKEYBOARDMODE_HPP
+
+#include "core/KeyboardMode.hpp"
+#include "core/state.hpp"
+
+class DefaultKeyboardMode : public KeyboardMode {
+  public:
+    DefaultKeyboardMode();
+
+  private:
+    void UpdateKeys(const InputState &inputs);
+};
+
+#endif
+```
+
+### Implementation File
+
+```cpp
+#include "modes/DefaultKeyboardMode.hpp"
+
+#include "core/socd.hpp"
+#include "core/state.hpp"
+
+DefaultKeyboardMode::DefaultKeyboardMode() : KeyboardMode() {}
+
+void DefaultKeyboardMode::UpdateKeys(const InputState &inputs) {
+    Press(HID_KEY_A, inputs.lf4);
+    Press(HID_KEY_B, inputs.lf3);
+    Press(HID_KEY_C, inputs.lf2);
+    Press(HID_KEY_D, inputs.lf1);
+    Press(HID_KEY_E, inputs.lt1);
+    Press(HID_KEY_F, inputs.lt2);
+    Press(HID_KEY_G, inputs.mb3);
+    Press(HID_KEY_H, inputs.mb1);
+    Press(HID_KEY_I, inputs.mb2);
+    Press(HID_KEY_J, inputs.rf5);
+    Press(HID_KEY_K, inputs.rf6);
+    Press(HID_KEY_L, inputs.rf7);
+    Press(HID_KEY_M, inputs.rf8);
+    Press(HID_KEY_N, inputs.rf1);
+    Press(HID_KEY_O, inputs.rf2);
+    Press(HID_KEY_P, inputs.rf3);
+    Press(HID_KEY_Q, inputs.rf4);
+    Press(HID_KEY_R, inputs.rt4);
+    Press(HID_KEY_S, inputs.rt3);
+    Press(HID_KEY_T, inputs.rt5);
+    Press(HID_KEY_U, inputs.rt1);
+    Press(HID_KEY_V, inputs.rt2);
+}
+```
+
+## Available Keycodes
+
+HayBox supports the full HID keyboard specification. Here are the most commonly used keycodes:
+
+### Letters
+```cpp
+HID_KEY_A through HID_KEY_Z  // 0x04 - 0x1D
+```
+
+### Numbers
+```cpp
+HID_KEY_1 through HID_KEY_0  // 0x1E - 0x27
+```
+
+### Function Keys
+```cpp
+HID_KEY_F1 through HID_KEY_F24  // 0x3A - 0x73
+```
+
+### Special Keys
+```cpp
+HID_KEY_ENTER           // 0x28
+HID_KEY_ESCAPE          // 0x29
+HID_KEY_BACKSPACE       // 0x2A
+HID_KEY_TAB             // 0x2B
+HID_KEY_SPACE           // 0x2C
+HID_KEY_CAPS_LOCK       // 0x39
+```
+
+### Arrow Keys
+```cpp
+HID_KEY_ARROW_RIGHT     // 0x4F
+HID_KEY_ARROW_LEFT      // 0x50
+HID_KEY_ARROW_DOWN      // 0x51
+HID_KEY_ARROW_UP        // 0x52
+```
+
+### Modifier Keys
+```cpp
+HID_KEY_CONTROL_LEFT    // 0xE0
+HID_KEY_SHIFT_LEFT      // 0xE1
+HID_KEY_ALT_LEFT        // 0xE2
+HID_KEY_GUI_LEFT        // 0xE3  (Windows/Command key)
+HID_KEY_CONTROL_RIGHT   // 0xE4
+HID_KEY_SHIFT_RIGHT     // 0xE5
+HID_KEY_ALT_RIGHT       // 0xE6
+HID_KEY_GUI_RIGHT       // 0xE7
+```
+
+### Punctuation
+```cpp
+HID_KEY_MINUS           // 0x2D  (-)
+HID_KEY_EQUAL           // 0x2E  (=)
+HID_KEY_BRACKET_LEFT    // 0x2F  ([)
+HID_KEY_BRACKET_RIGHT   // 0x30  (])
+HID_KEY_BACKSLASH       // 0x31  (\)
+HID_KEY_SEMICOLON       // 0x33  (;)
+HID_KEY_APOSTROPHE      // 0x34  (')
+HID_KEY_GRAVE           // 0x35  (`)
+HID_KEY_COMMA           // 0x36  (,)
+HID_KEY_PERIOD          // 0x37  (.)
+HID_KEY_SLASH           // 0x38  (/)
+```
+
+### Numpad
+```cpp
+HID_KEY_KEYPAD_DIVIDE   // 0x54
+HID_KEY_KEYPAD_MULTIPLY // 0x55
+HID_KEY_KEYPAD_SUBTRACT // 0x56
+HID_KEY_KEYPAD_ADD      // 0x57
+HID_KEY_KEYPAD_ENTER    // 0x58
+HID_KEY_KEYPAD_1 through HID_KEY_KEYPAD_0  // 0x59 - 0x62
+```
+
+<Info>
+For a complete list of all available keycodes, see the [TinyUSB HID keycodes](https://github.com/hathach/tinyusb/blob/master/src/class/hid/hid.h) or check `include/core/keycodes.h` in the HayBox source.
+</Info>
+
+## Creating Input Layers
+
+You can create input layers (similar to keyboard layers) by using conditional logic:
+
+```cpp
+void CustomKeyboardMode::UpdateKeys(const InputState &inputs) {
+    // Base layer - WASD movement
+    Press(HID_KEY_W, inputs.rf4);
+    Press(HID_KEY_A, inputs.lf3);
+    Press(HID_KEY_S, inputs.lf2);
+    Press(HID_KEY_D, inputs.lf1);
+    
+    // Layer modifier - when holding Mod X
+    if (inputs.lt1) {
+        // Remap directional inputs to arrow keys
+        Press(HID_KEY_ARROW_UP, inputs.rf4);
+        Press(HID_KEY_ARROW_LEFT, inputs.lf3);
+        Press(HID_KEY_ARROW_DOWN, inputs.lf2);
+        Press(HID_KEY_ARROW_RIGHT, inputs.lf1);
+    } else {
+        // Normal layer
+        Press(HID_KEY_W, inputs.rf4);
+        Press(HID_KEY_A, inputs.lf3);
+        Press(HID_KEY_S, inputs.lf2);
+        Press(HID_KEY_D, inputs.lf1);
+    }
+    
+    // Action buttons available on both layers
+    Press(HID_KEY_SPACE, inputs.rt1);
+    Press(HID_KEY_SHIFT_LEFT, inputs.lf4);
+}
+```
+
+## Complete Example: Gaming Keyboard Mode
+
+<Steps>
+
+<Step title="Create the header file">
+
+Create `include/modes/GamingKeyboardMode.hpp`:
+
+```cpp
+#ifndef _MODES_GAMINGKEYBOARDMODE_HPP
+#define _MODES_GAMINGKEYBOARDMODE_HPP
+
+#include "core/KeyboardMode.hpp"
+#include "core/state.hpp"
+
+class GamingKeyboardMode : public KeyboardMode {
+  public:
+    GamingKeyboardMode();
+
+  private:
+    void UpdateKeys(const InputState &inputs);
+};
+
+#endif
+```
+
+</Step>
+
+<Step title="Create the implementation file">
+
+Create `src/modes/GamingKeyboardMode.cpp`:
+
+```cpp
+#include "modes/GamingKeyboardMode.hpp"
+#include "core/socd.hpp"
+
+GamingKeyboardMode::GamingKeyboardMode() : KeyboardMode() {
+    // Configure SOCD for directional inputs
+    _socd_pair_count = 2;
+    _socd_pairs = new socd::SocdPair[_socd_pair_count]{
+        socd::SocdPair{&InputState::lf3, &InputState::lf1, socd::SOCD_2IP_NO_REAC},
+        socd::SocdPair{&InputState::lf2, &InputState::rf4, socd::SOCD_2IP_NO_REAC},
+    };
+}
+
+void GamingKeyboardMode::UpdateKeys(const InputState &inputs) {
+    // WASD movement
+    Press(HID_KEY_W, inputs.rf4);
+    Press(HID_KEY_A, inputs.lf3);
+    Press(HID_KEY_S, inputs.lf2);
+    Press(HID_KEY_D, inputs.lf1);
+    
+    // Action buttons
+    Press(HID_KEY_SPACE, inputs.rt1);      // Jump
+    Press(HID_KEY_E, inputs.rf1);          // Interact
+    Press(HID_KEY_R, inputs.rf2);          // Reload
+    Press(HID_KEY_F, inputs.rf3);          // Use item
+    Press(HID_KEY_Q, inputs.rf4);          // Ability 1
+    Press(HID_KEY_C, inputs.rf5);          // Crouch
+    
+    // Modifiers
+    Press(HID_KEY_SHIFT_LEFT, inputs.lf4); // Sprint
+    Press(HID_KEY_CONTROL_LEFT, inputs.lt1); // Crouch
+    Press(HID_KEY_ALT_LEFT, inputs.lt2);   // Walk
+    
+    // Number keys for weapon/item selection
+    Press(HID_KEY_1, inputs.rt2);
+    Press(HID_KEY_2, inputs.rt3);
+    Press(HID_KEY_3, inputs.rt4);
+    Press(HID_KEY_4, inputs.rt5);
+    
+    // Menu buttons
+    Press(HID_KEY_ESCAPE, inputs.mb1);     // Menu
+    Press(HID_KEY_TAB, inputs.mb2);        // Scoreboard
+    Press(HID_KEY_M, inputs.mb3);          // Map
+}
+```
+
+</Step>
+
+<Step title="Configure SOCD in constructor">
+
+Just like controller modes, keyboard modes support SOCD cleaning:
+
+```cpp
+GamingKeyboardMode::GamingKeyboardMode() : KeyboardMode() {
+    _socd_pair_count = 2;
+    _socd_pairs = new socd::SocdPair[_socd_pair_count]{
+        socd::SocdPair{&InputState::lf3, &InputState::lf1, socd::SOCD_2IP_NO_REAC}, // A/D
+        socd::SocdPair{&InputState::lf2, &InputState::rf4, socd::SOCD_2IP_NO_REAC}, // W/S
+    };
+}
+```
+
+</Step>
+
+<Step title="Register your mode">
+
+Add your mode to `config/mode_selection.hpp`:
+
+```cpp
+#include "modes/GamingKeyboardMode.hpp"
+
+// In select_mode() function:
+if (inputs.mb1 && inputs.lt2 && inputs.rf1) {
+    return new GamingKeyboardMode();
+}
+```
+
+<Warning>
+Remember to hold the appropriate buttons to select DInput backend on plugin, as keyboard modes only work with DInput (not XInput).
+</Warning>
+
+</Step>
+
+</Steps>
+
+## Advanced: Multi-Layer Keyboard Mode
+
+Here's an example of a keyboard mode with multiple layers:
+
+```cpp
+void MultiLayerKeyboardMode::UpdateKeys(const InputState &inputs) {
+    // Layer 1: Default (nothing held)
+    if (!inputs.lt1 && !inputs.lt2) {
+        Press(HID_KEY_W, inputs.rf4);
+        Press(HID_KEY_A, inputs.lf3);
+        Press(HID_KEY_S, inputs.lf2);
+        Press(HID_KEY_D, inputs.lf1);
+        Press(HID_KEY_SPACE, inputs.rt1);
+    }
+    
+    // Layer 2: Mod X held (arrow keys)
+    if (inputs.lt1 && !inputs.lt2) {
+        Press(HID_KEY_ARROW_UP, inputs.rf4);
+        Press(HID_KEY_ARROW_LEFT, inputs.lf3);
+        Press(HID_KEY_ARROW_DOWN, inputs.lf2);
+        Press(HID_KEY_ARROW_RIGHT, inputs.lf1);
+        Press(HID_KEY_ENTER, inputs.rt1);
+    }
+    
+    // Layer 3: Mod Y held (number keys)
+    if (inputs.lt2 && !inputs.lt1) {
+        Press(HID_KEY_1, inputs.lf3);
+        Press(HID_KEY_2, inputs.lf2);
+        Press(HID_KEY_3, inputs.lf1);
+        Press(HID_KEY_4, inputs.rf4);
+    }
+    
+    // Layer 4: Both mods held (function keys)
+    if (inputs.lt1 && inputs.lt2) {
+        Press(HID_KEY_F1, inputs.lf3);
+        Press(HID_KEY_F2, inputs.lf2);
+        Press(HID_KEY_F3, inputs.lf1);
+        Press(HID_KEY_F4, inputs.rf4);
+    }
+    
+    // Keys available on all layers
+    Press(HID_KEY_ESCAPE, inputs.mb1);
+    Press(HID_KEY_TAB, inputs.mb2);
+}
+```
+
+## Understanding InputState
+
+The `InputState` struct contains all physical button inputs. See the [Controller Modes](/customization/controller-modes#understanding-input-and-output-states) page for the complete InputState reference.
+
+### Common Button Assignments
+
+- **lf1-lf4**: Left face directional inputs (Right, Down, Left, Up equivalent)
+- **rf1-rf8**: Right face action buttons
+- **lt1-lt2**: Left thumb modifiers (Mod X, Mod Y)
+- **rt1-rt8**: Right thumb inputs (often C-stick directions)
+- **mb1-mb3**: Middle buttons (Start, Select, etc.)
+
+## Tips and Best Practices
+
+- Keep key mappings intuitive and game-appropriate
+- Use SOCD cleaning for directional inputs (WASD, arrow keys)
+- Test thoroughly with the target game or application
+- Consider creating multiple layers for different game modes
+- Document your key mappings for other users
+- Use modifier keys (Shift, Ctrl, Alt) for expanded functionality
+
+<Note>
+Keyboard modes are perfect for games that lack gamepad support or for applications where keyboard input is required.
+</Note>
+
+## Activating Keyboard Modes
+
+To use a keyboard mode:
+
+1. Hold the appropriate backend selection button on plugin to force DInput mode:
+   - **Arduino/AVR**: DInput is the default backend when plugged into USB
+   - **Pico/RP2040**: Hold RF3 (Z) on plugin to select DInput mode
+
+2. Switch to your keyboard mode using the configured button combination
+
+Default keyboard mode activation (when using DInput):
+- **MB1 + LT2 + LF4** (Start + Mod Y + L) - Default keyboard mode
+
+## See Also
+
+- [Controller Modes](/customization/controller-modes) - Creating controller input modes
+- [Mode Selection](/customization/mode-selection) - Configuring mode switching
+- [SOCD Cleaning](/customization/socd) - Understanding SOCD resolution

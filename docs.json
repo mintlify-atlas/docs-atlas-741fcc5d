@@ -1,122 +1,144 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "HayBox",
+  "theme": "aspen",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#6cb4bc",
+    "light": "#2a4958",
+    "dark": "#98f6f9"
   },
-  "favicon": "/favicon.svg",
+  "logo": {
+    "light": "https://media.brand.dev/aa64d125-8623-491c-8a71-b47c0f4befb5.png",
+    "dark": "https://media.brand.dev/aa64d125-8623-491c-8a71-b47c0f4befb5.png"
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/jonnyhaystack/haybox"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/jonnyhaystack/haybox"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Getting Started",
             "pages": [
-              "index",
-              "quickstart",
-              "development"
+              "introduction",
+              "installation",
+              "building-from-source"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Usage",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "usage/button-holds",
+              "usage/communication-backends",
+              "usage/game-modes",
+              "usage/dolphin-setup"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Hardware Support",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "hardware/supported-controllers",
+              "hardware/pinouts",
+              "hardware/rp2040",
+              "hardware/avr"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Troubleshooting",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "troubleshooting"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "Customization",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Configuration",
             "pages": [
-              "api-reference/introduction"
+              "customization/console-selection",
+              "customization/mode-selection",
+              "customization/socd"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Creating Custom Modes",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "customization/controller-modes",
+              "customization/keyboard-modes"
+            ]
+          },
+          {
+            "group": "Input Sources",
+            "pages": [
+              "customization/input-sources",
+              "customization/dual-core"
+            ]
+          },
+          {
+            "group": "Mode-Specific Features",
+            "pages": [
+              "customization/melee-features",
+              "customization/projectm-features"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core Classes",
+            "pages": [
+              "api/controller-mode",
+              "api/keyboard-mode",
+              "api/input-source",
+              "api/communication-backend"
+            ]
+          },
+          {
+            "group": "Game Modes",
+            "pages": [
+              "api/modes/melee20button",
+              "api/modes/melee18button",
+              "api/modes/projectm",
+              "api/modes/ultimate",
+              "api/modes/fgc",
+              "api/modes/rivals"
+            ]
+          },
+          {
+            "group": "Input Sources",
+            "pages": [
+              "api/input/gpio-button",
+              "api/input/switch-matrix",
+              "api/input/nunchuk",
+              "api/input/gamecube-controller"
+            ]
+          },
+          {
+            "group": "Communication",
+            "pages": [
+              "api/comms/xinput",
+              "api/comms/dinput",
+              "api/comms/gamecube",
+              "api/comms/n64",
+              "api/comms/switch"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

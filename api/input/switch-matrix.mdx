@@ -1,0 +1,354 @@
+---
+title: 'SwitchMatrixInput'
+description: 'Matrix-based button input source for reading buttons wired in a row/column matrix configuration'
+---
+
+## Overview
+
+`SwitchMatrixInput` is a templated input source for reading buttons arranged in a matrix configuration with rows and columns. This approach reduces the number of GPIO pins required compared to individual button wiring.
+
+For example, a 5x13 matrix can read up to 65 buttons using only 18 GPIO pins (5 + 13), whereas individual wiring would require 65 pins.
+
+## Class Declaration
+
+```cpp
+template <size_t num_rows, size_t num_cols>
+class SwitchMatrixInput : public InputSource {
+  public:
+    SwitchMatrixInput(
+        const uint row_pins[num_rows],
+        const uint col_pins[num_cols],
+        const Button (&matrix)[num_rows][num_cols],
+        DiodeDirection direction
+    );
+    InputScanSpeed ScanSpeed();
+    void UpdateInputs(InputState &inputs);
+};
+```
+
+<ParamField path="num_rows" type="size_t" required>
+  Template parameter specifying the number of rows in the matrix.
+</ParamField>
+
+<ParamField path="num_cols" type="size_t" required>
+  Template parameter specifying the number of columns in the matrix.
+</ParamField>
+
+## Diode Direction
+
+```cpp
+enum class DiodeDirection {
+    ROW2COL,  // Diodes point from rows to columns (cathode on column side)
+    COL2ROW,  // Diodes point from columns to rows (cathode on row side)
+};
+```
+
+<ParamField path="ROW2COL" type="DiodeDirection">
+  Diodes are oriented with anodes connected to rows and cathodes connected to columns. Rows are driven LOW and columns are read.
+</ParamField>
+
+<ParamField path="COL2ROW" type="DiodeDirection">
+  Diodes are oriented with anodes connected to columns and cathodes connected to rows. Columns are driven LOW and rows are read.
+</ParamField>
+
+## Constructor
+
+```cpp
+SwitchMatrixInput(
+    const uint row_pins[num_rows],
+    const uint col_pins[num_cols],
+    const Button (&matrix)[num_rows][num_cols],
+    DiodeDirection direction
+)
+```
+
+<ParamField path="row_pins" type="const uint[]" required>
+  Array of GPIO pin numbers for matrix rows. Array size must match the `num_rows` template parameter.
+</ParamField>
+
+<ParamField path="col_pins" type="const uint[]" required>
+  Array of GPIO pin numbers for matrix columns. Array size must match the `num_cols` template parameter.
+</ParamField>
+
+<ParamField path="matrix" type="const Button[][]" required>
+  2D array mapping matrix positions to button identifiers. Use `NA` (or `BTN_UNSPECIFIED`) for unused positions.
+</ParamField>
+
+<ParamField path="direction" type="DiodeDirection" required>
+  Diode orientation in the matrix hardware. Must match your physical circuit design.
+</ParamField>
+
+## Methods
+
+### ScanSpeed()
+
+Returns `InputScanSpeed::FAST`, indicating this input source should be polled frequently.
+
+```cpp
+InputScanSpeed ScanSpeed();
+```
+
+<ResponseField name="return" type="InputScanSpeed">
+  Always returns `InputScanSpeed::FAST`
+</ResponseField>
+
+### UpdateInputs()
+
+Scans the entire matrix and updates the input state with current button states.
+
+```cpp
+void UpdateInputs(InputState &inputs);
+```
+
+<ParamField path="inputs" type="InputState&" required>
+  Reference to the `InputState` structure to update with current button states.
+</ParamField>
+
+## Configuration Example
+
+### Complete Matrix Configuration
+
+```cpp config.cpp
+#include "input/SwitchMatrixInput.hpp"
+#include "core/state.hpp"
+
+// Define matrix dimensions
+const size_t num_rows = 5;
+const size_t num_cols = 13;
+
+// Define pin assignments
+const uint row_pins[num_rows] = { 20, 19, 18, 17, 16 };
+const uint col_pins[num_cols] = { 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0 };
+
+// Define button matrix layout
+// NA indicates no button at that position
+const Button matrix[num_rows][num_cols] = {
+    {BTN_LF8, BTN_LF7, BTN_LF6, BTN_LF5, NA, BTN_MB3, BTN_MB1, BTN_MB2, NA, BTN_RF5, BTN_RF6, BTN_RF7, BTN_RF8 },
+    {BTN_LF4, BTN_LF3, BTN_LF2, BTN_LF1, NA, BTN_MB4, BTN_MB5, BTN_MB6, NA, BTN_RF1, BTN_RF2, BTN_RF3, BTN_RF4 },
+    {BTN_LF12,BTN_LF11,BTN_LF10,BTN_LF9, NA, BTN_MB7, BTN_MB8, BTN_MB9, NA, BTN_RF9, BTN_RF10,BTN_RF11,BTN_RF12},
+    {NA,      BTN_LT5, BTN_LT4, BTN_LT3, NA, BTN_MB10,BTN_MB11,BTN_MB12,NA, BTN_RT3, BTN_RT4, BTN_RT5, NA      },
+    {NA,      NA,      BTN_LT1, BTN_LT2, NA, BTN_LT6, BTN_RT7, BTN_RT6, NA, BTN_RT2, BTN_RT1, NA,      NA      },
+};
+
+// Specify diode direction
+const DiodeDirection diode_direction = DiodeDirection::COL2ROW;
+
+// Create matrix input source
+SwitchMatrixInput<num_rows, num_cols> matrix_input(
+    row_pins, 
+    col_pins, 
+    matrix, 
+    diode_direction
+);
+
+void setup() {
+    static InputState inputs;
+    
+    // Read buttons immediately for early checks
+    matrix_input.UpdateInputs(inputs);
+    
+    // Check for bootloader entry
+    if (inputs.rt2) {
+        reboot_bootloader();
+    }
+    
+    // Initialize backends (no input_sources array needed)
+    backend_count = initialize_backends(
+        backends, 
+        inputs, 
+        nullptr,  // No input sources array needed
+        0, 
+        config, 
+        pinout
+    );
+}
+```
+
+### Dual-Core Usage (Raspberry Pi Pico)
+
+For optimal performance on RP2040, scan the matrix on the second core:
+
+```cpp config.cpp
+// Core 0: Main communication loop
+void setup() {
+    static InputState inputs;
+    matrix_input.UpdateInputs(inputs);
+    
+    if (inputs.rt2) {
+        reboot_bootloader();
+    }
+    
+    backend_count = initialize_backends(backends, inputs, nullptr, 0, config, pinout);
+    setup_mode_activation_bindings(config.game_mode_configs, config.game_mode_configs_count);
+}
+
+void loop() {
+    select_mode(backends, backend_count, config);
+    
+    for (size_t i = 0; i < backend_count; i++) {
+        backends[i]->SendReport();
+    }
+}
+
+// Core 1: Dedicated input scanning
+void setup1() {
+    while (backends == nullptr) {
+        tight_loop_contents();
+    }
+}
+
+void loop1() {
+    if (backends != nullptr) {
+        // Continuously scan matrix on second core
+        matrix_input.UpdateInputs(backends[0]->GetInputs());
+    }
+}
+```
+
+## Hardware Design
+
+### Matrix Wiring Basics
+
+A switch matrix uses diodes to prevent "ghosting" when multiple buttons are pressed simultaneously.
+
+#### COL2ROW Configuration
+
+```
+         Col0    Col1    Col2
+          |       |       |
+Row0 ----●---|>--●---|>--●---|>--
+          |       |       |
+Row1 ----●---|>--●---|>--●---|>--
+          |       |       |
+
+● = Switch
+|>= Diode (anode on column side, cathode on row side)
+```
+
+#### ROW2COL Configuration
+
+```
+         Col0    Col1    Col2
+          |       |       |
+Row0 ----●--<|---●--<|---●--<|---
+          |       |       |
+Row1 ----●--<|---●--<|---●--<|---
+          |       |       |
+
+● = Switch
+<|= Diode (anode on row side, cathode on column side)
+```
+
+<Warning>
+  The diode direction in your hardware MUST match the `DiodeDirection` parameter. Incorrect configuration will result in buttons not being detected or multiple buttons being triggered incorrectly.
+</Warning>
+
+## Matrix Layout Planning
+
+### Using NA for Empty Positions
+
+```cpp
+#define NA BTN_UNSPECIFIED  // Already defined in SwitchMatrixInput.hpp
+
+const Button matrix[3][4] = {
+    { BTN_LF1, BTN_LF2, BTN_LF3, BTN_LF4 },
+    { BTN_RF1, BTN_RF2, NA,      NA      },  // Only 2 buttons in this row
+    { BTN_MB1, NA,      NA,      BTN_MB2 },  // Buttons in non-contiguous positions
+};
+```
+
+### Optimizing Matrix Dimensions
+
+Choose matrix dimensions to minimize GPIO usage:
+
+- **Total pins required** = `num_rows + num_cols`
+- **Maximum buttons** = `num_rows × num_cols`
+- **Optimal ratio**: Try to keep rows and columns roughly balanced
+
+| Buttons | Configuration | Total Pins | Efficiency |
+|---------|---------------|------------|------------|
+| 20 | 4×5 | 9 pins | 2.22 buttons/pin |
+| 20 | 2×10 | 12 pins | 1.67 buttons/pin |
+| 20 | 5×4 | 9 pins | 2.22 buttons/pin |
+
+<Note>
+  For matrices with many empty positions, consider using multiple smaller matrices or switching to [GpioButtonInput](/api/input/gpio-button) for buttons that don't fit well in the matrix.
+</Note>
+
+## Scanning Algorithm
+
+The matrix is scanned by:
+
+1. Setting one output (row or column) to LOW
+2. Reading all inputs (columns or rows)
+3. Recording pressed buttons at the intersections
+4. Returning the output to HIGH (pull-up)
+5. Moving to the next output
+
+This continues until all outputs have been scanned.
+
+```cpp
+// Simplified scanning logic
+for (size_t output = 0; output < num_outputs; output++) {
+    gpio_write(output_pins[output], LOW);
+    
+    for (size_t input = 0; input < num_inputs; input++) {
+        bool pressed = !gpio_read(input_pins[input]);
+        if (pressed) {
+            set_button(inputs, matrix[output][input], true);
+        }
+    }
+    
+    gpio_write(output_pins[output], HIGH);
+}
+```
+
+## Performance
+
+- **Scan Speed**: `FAST` - suitable for high-frequency polling
+- **Typical Scan Rate**: 1000Hz+ (all buttons scanned per cycle)
+- **Latency**: < 1ms for button state changes
+- **Pin Efficiency**: ~2-3 buttons per GPIO pin (depending on matrix size)
+
+## Platform Notes
+
+### Raspberry Pi Pico (RP2040)
+
+- Supports up to 29 GPIO pins (GP0-GP28)
+- Hardware-accelerated GPIO reads for fast scanning
+- Dual-core support allows dedicated scanning core
+- Recommended for large matrices (10+ rows/columns)
+
+### Arduino (AVR)
+
+- Limited GPIO availability (14-20 pins depending on board)
+- Suitable for smaller matrices (5×5 or smaller)
+- Single-core requires efficient loop() implementation
+
+## Troubleshooting
+
+### Multiple Buttons Triggering Simultaneously
+
+- **Cause**: Incorrect diode direction
+- **Solution**: Verify physical diode orientation matches `DiodeDirection` parameter
+
+### Buttons Not Responding
+
+- **Cause**: Swapped row/column pin assignments
+- **Solution**: Double-check pin arrays match physical wiring
+
+### Intermittent Button Presses
+
+- **Cause**: Scan rate too low, timing issues
+- **Solution**: Use dual-core scanning on Pico, verify `UpdateInputs()` is called in loop
+
+<Note>
+  Matrix scanning is sensitive to timing. Always call `UpdateInputs()` in every loop iteration, or use a dedicated core for continuous scanning.
+</Note>
+
+## See Also
+
+- [GpioButtonInput](/api/input/gpio-button) - For non-matrix button configurations
+- [DebouncedSwitchMatrixInput](/api/input/switch-matrix) - Matrix input with hardware debouncing
+- [Button Reference](/hardware/pinouts#button-reference) - Complete button identifier reference
+- [Input Sources](/customization/input-sources) - Overview of all input source types

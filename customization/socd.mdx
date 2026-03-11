@@ -1,0 +1,398 @@
+---
+title: SOCD Configuration
+description: Configure Simultaneous Opposite Cardinal Direction (SOCD) resolution in HayBox firmware
+---
+
+## What is SOCD?
+
+SOCD (Simultaneous Opposite Cardinal Direction) resolution determines what happens when you press opposing directions at the same time, such as left + right or up + down. HayBox provides fully customizable SOCD cleaning for each button pair in each mode.
+
+## SOCD Types
+
+HayBox supports six different SOCD resolution methods:
+
+<CardGroup cols={2}>
+  <Card title="SOCD_NEUTRAL" icon="equals">
+    **Neutral (0.5 0.5)**
+    
+    When both directions are held, the output is neutral (center). This is the default if no SOCD type is specified.
+    
+    **Use case:** Traditional fighting games, hitbox-style controllers
+  </Card>
+
+  <Card title="SOCD_2IP" icon="arrow-right-arrow-left">
+    **Second Input Priority**
+    
+    The last pressed direction takes priority. Releasing the second direction reactivates the first.
+    
+    Example: Left → Left+Right = Right → Release Right = Left
+    
+    **Use case:** Platform fighters with reactivation needed
+  </Card>
+
+  <Card title="SOCD_2IP_NO_REAC" icon="arrow-right">
+    **Second Input Priority (No Reactivation)**
+    
+    The last pressed direction takes priority. Releasing the second direction gives neutral - the first direction must be physically re-pressed.
+    
+    Example: Left → Left+Right = Right → Release Right = Neutral
+    
+    **Use case:** Melee, competitive play (prevents accidental reactivation)
+  </Card>
+
+  <Card title="SOCD_DIR1_PRIORITY" icon="arrow-left">
+    **First Direction Priority**
+    
+    The first button in the SOCD pair always takes priority over the second.
+    
+    **Use case:** Custom controllers, specific game mechanics
+  </Card>
+
+  <Card title="SOCD_DIR2_PRIORITY" icon="arrow-right">
+    **Second Direction Priority**
+    
+    The second button in the SOCD pair always takes priority over the first.
+    
+    **Use case:** Custom controllers, asymmetric layouts
+  </Card>
+
+  <Card title="SOCD_NONE" icon="ban">
+    **No SOCD Resolution**
+    
+    Both directions are sent to the game. The game decides what happens.
+    
+    **Use case:** Testing, games with built-in SOCD handling
+  </Card>
+</CardGroup>
+
+## Configuring SOCD Pairs
+
+SOCD pairs are configured in your mode's configuration. Each pair defines two opposing directions and how to resolve conflicts between them.
+
+### Basic Configuration
+
+In `config_defaults.hpp`, define SOCD pairs for each game mode:
+
+```cpp HAL/pico/include/config_defaults.hpp
+GameModeConfig {
+    .mode_id = MODE_MELEE,
+    .socd_pairs_count = 4,
+    .socd_pairs = {
+        // Left/Right - most critical for competitive play
+        SocdPair { 
+            .button_dir1 = BTN_LF3,  // Left
+            .button_dir2 = BTN_LF1,  // Right
+            .socd_type = SOCD_2IP_NO_REAC 
+        },
+        // Down/Up - important for movement
+        SocdPair { 
+            .button_dir1 = BTN_LF2,  // Down
+            .button_dir2 = BTN_RF4,  // Up
+            .socd_type = SOCD_2IP_NO_REAC 
+        },
+        // C-Stick Left/Right
+        SocdPair { 
+            .button_dir1 = BTN_RT3,  // C-Left
+            .button_dir2 = BTN_RT5,  // C-Right
+            .socd_type = SOCD_2IP_NO_REAC 
+        },
+        // C-Stick Down/Up
+        SocdPair { 
+            .button_dir1 = BTN_RT2,  // C-Down
+            .button_dir2 = BTN_RT4,  // C-Up
+            .socd_type = SOCD_2IP_NO_REAC 
+        },
+    },
+}
+```
+
+### Different SOCD Types Per Mode
+
+Different modes can use different SOCD types for the same button pairs:
+
+<CodeGroup>
+```cpp Melee Mode
+GameModeConfig {
+    .mode_id = MODE_MELEE,
+    .socd_pairs = {
+        SocdPair { .button_dir1 = BTN_LF3, .button_dir2 = BTN_LF1, .socd_type = SOCD_2IP_NO_REAC },
+        SocdPair { .button_dir1 = BTN_LF2, .button_dir2 = BTN_RF4, .socd_type = SOCD_2IP_NO_REAC },
+    },
+}
+```
+
+```cpp Ultimate Mode
+GameModeConfig {
+    .mode_id = MODE_ULTIMATE,
+    .socd_pairs = {
+        SocdPair { .button_dir1 = BTN_LF3, .button_dir2 = BTN_LF1, .socd_type = SOCD_2IP },
+        SocdPair { .button_dir1 = BTN_LF2, .button_dir2 = BTN_RF4, .socd_type = SOCD_2IP },
+    },
+}
+```
+
+```cpp FGC Mode
+GameModeConfig {
+    .mode_id = MODE_FGC,
+    .socd_pairs = {
+        SocdPair { .button_dir1 = BTN_LF3, .button_dir2 = BTN_LF1, .socd_type = SOCD_NEUTRAL },
+        SocdPair { .button_dir1 = BTN_LF2, .button_dir2 = BTN_LT1, .socd_type = SOCD_NEUTRAL },
+    },
+}
+```
+</CodeGroup>
+
+## How SOCD Resolution Works
+
+SOCD resolution happens automatically before the mode's `UpdateDigitalOutputs()` and `UpdateAnalogOutputs()` functions are called.
+
+### Processing Flow
+
+<Steps>
+  <Step title="Input Reading">
+    The firmware reads the raw button states from your input sources (GPIO pins, switch matrix, etc.).
+  </Step>
+
+  <Step title="Button Remapping">
+    If configured, button remapping is applied to the input state.
+  </Step>
+
+  <Step title="SOCD Resolution">
+    The `HandleSocd()` function processes each configured SOCD pair according to its type:
+
+    ```cpp src/core/InputMode.cpp
+    void InputMode::HandleSocd(InputState &inputs) {
+        for (size_t i = 0; i < _config->socd_pairs_count; i++) {
+            const SocdPair &pair = _config->socd_pairs[i];
+            switch (pair.socd_type) {
+                case SOCD_NEUTRAL:
+                    socd::neutral(inputs, pair.button_dir1, pair.button_dir2);
+                    break;
+                case SOCD_2IP:
+                    socd::second_input_priority(inputs, pair.button_dir1, pair.button_dir2, _socd_states[i]);
+                    break;
+                case SOCD_2IP_NO_REAC:
+                    socd::second_input_priority_no_reactivation(inputs, pair.button_dir1, pair.button_dir2, _socd_states[i]);
+                    break;
+                case SOCD_DIR1_PRIORITY:
+                    socd::dir1_priority(inputs, pair.button_dir1, pair.button_dir2);
+                    break;
+                case SOCD_DIR2_PRIORITY:
+                    socd::dir1_priority(inputs, pair.button_dir2, pair.button_dir1);
+                    break;
+            }
+        }
+    }
+    ```
+  </Step>
+
+  <Step title="Output Generation">
+    The mode's update functions generate outputs based on the cleaned input state.
+  </Step>
+</Steps>
+
+## Real-World Examples
+
+### Melee Mode (B0XX V3 Specification)
+
+Melee mode uses 2IP No Reactivation to prevent accidental inputs:
+
+```cpp src/modes/Melee20Button.cpp
+// From config_defaults.hpp
+.socd_pairs = {
+    SocdPair { .button_dir1 = BTN_LF3, .button_dir2 = BTN_LF1, .socd_type = SOCD_2IP_NO_REAC },
+    SocdPair { .button_dir1 = BTN_LF2, .button_dir2 = BTN_RF4, .socd_type = SOCD_2IP_NO_REAC },
+    SocdPair { .button_dir1 = BTN_RT3, .button_dir2 = BTN_RT5, .socd_type = SOCD_2IP_NO_REAC },
+    SocdPair { .button_dir1 = BTN_RT2, .button_dir2 = BTN_RT4, .socd_type = SOCD_2IP_NO_REAC },
+}
+```
+
+<Note>
+Melee20Button overrides `HandleSocd()` to detect horizontal SOCD for the ledgedash maximum jump trajectory feature, but still calls the parent `InputMode::HandleSocd()` to perform the actual cleaning.
+</Note>
+
+### Ultimate Mode
+
+Ultimate mode uses standard 2IP with reactivation:
+
+```cpp
+.socd_pairs = {
+    SocdPair { .button_dir1 = BTN_LF3, .button_dir2 = BTN_LF1, .socd_type = SOCD_2IP },
+    SocdPair { .button_dir1 = BTN_LF2, .button_dir2 = BTN_RF4, .socd_type = SOCD_2IP },
+    SocdPair { .button_dir1 = BTN_RT3, .button_dir2 = BTN_RT5, .socd_type = SOCD_2IP },
+    SocdPair { .button_dir1 = BTN_RT2, .button_dir2 = BTN_RT4, .socd_type = SOCD_2IP },
+}
+```
+
+### FGC Mode (Fighting Games)
+
+FGC mode uses neutral SOCD resolution, standard for hitbox-style controllers:
+
+```cpp
+.socd_pairs = {
+    SocdPair { .button_dir1 = BTN_LF3, .button_dir2 = BTN_LF1, .socd_type = SOCD_NEUTRAL },
+    SocdPair { .button_dir1 = BTN_LF2, .button_dir2 = BTN_LT1, .socd_type = SOCD_NEUTRAL },
+}
+```
+
+<Note>
+FGC mode only defines 2 SOCD pairs because it uses D-Pad directions instead of analog stick, so C-stick SOCD pairs aren't needed.
+</Note>
+
+## Advanced: Custom SOCD Handling
+
+You can override the `HandleSocd()` function in your custom mode to implement special logic:
+
+```cpp Custom Mode Example
+class CustomMode : public ControllerMode {
+  protected:
+    void HandleSocd(InputState &inputs) override {
+        // Store horizontal SOCD state before cleaning
+        bool horizontal_socd = inputs.lf3 && inputs.lf1;
+        
+        // Call parent to perform standard SOCD cleaning
+        InputMode::HandleSocd(inputs);
+        
+        // Use horizontal_socd state in your update functions
+        if (horizontal_socd) {
+            // Custom behavior when both left and right are held
+        }
+    }
+};
+```
+
+## SOCD State Management
+
+For 2IP and 2IP No Reactivation, the firmware maintains state for each SOCD pair:
+
+```cpp include/core/socd.hpp
+typedef struct {
+    bool was_dir1 = false;      // Was button 1 pressed last frame?
+    bool was_dir2 = false;      // Was button 2 pressed last frame?
+    bool lock_dir1 = false;     // Is button 1 locked out? (2IP_NO_REAC)
+    bool lock_dir2 = false;     // Is button 2 locked out? (2IP_NO_REAC)
+} SocdState;
+```
+
+This state allows the firmware to:
+- Detect which button was pressed second
+- Track when to reactivate the first button (2IP)
+- Lock out buttons until release (2IP_NO_REAC)
+
+## Choosing the Right SOCD Type
+
+<AccordionGroup>
+  <Accordion title="When to use SOCD_2IP_NO_REAC">
+    **Best for:** Melee, competitive Smash, any game where accidental reactivation could cause problems
+    
+    **Advantages:**
+    - Most precise control
+    - Prevents accidental backwards inputs
+    - Tournament legal for most events
+    
+    **Disadvantages:**
+    - Requires more deliberate inputs
+    - Can feel less fluid for some players
+  </Accordion>
+
+  <Accordion title="When to use SOCD_2IP">
+    **Best for:** Ultimate, platform fighters with buffering, casual play
+    
+    **Advantages:**
+    - More fluid movement
+    - Easier to input rapid direction changes
+    - Reactivation feels natural
+    
+    **Disadvantages:**
+    - Can cause unintended inputs if not careful
+  </Accordion>
+
+  <Accordion title="When to use SOCD_NEUTRAL">
+    **Best for:** Traditional fighting games, hitbox layouts
+    
+    **Advantages:**
+    - Tournament standard for most fighting games
+    - Prevents charge move exploits
+    - Simple and predictable
+    
+    **Disadvantages:**
+    - Can't hold both directions for any purpose
+  </Accordion>
+
+  <Accordion title="When to use SOCD_DIR1_PRIORITY or SOCD_DIR2_PRIORITY">
+    **Best for:** Custom controllers with asymmetric layouts, specific game mechanics
+    
+    **Advantages:**
+    - Consistent priority regardless of timing
+    - Useful for games where one direction should always win
+    
+    **Disadvantages:**
+    - Less common, may be unexpected
+    - Tournament legality may vary
+  </Accordion>
+
+  <Accordion title="When to use SOCD_NONE">
+    **Best for:** Testing, debugging, games with built-in SOCD handling
+    
+    **Advantages:**
+    - See raw inputs
+    - Useful for development
+    
+    **Disadvantages:**
+    - May cause undefined behavior in games
+    - Not tournament legal
+  </Accordion>
+</AccordionGroup>
+
+## Common SOCD Patterns
+
+### Standard Platform Fighter
+
+```cpp
+.socd_pairs = {
+    SocdPair { .button_dir1 = BTN_LF3, .button_dir2 = BTN_LF1, .socd_type = SOCD_2IP_NO_REAC },
+    SocdPair { .button_dir1 = BTN_LF2, .button_dir2 = BTN_RF4, .socd_type = SOCD_2IP_NO_REAC },
+    SocdPair { .button_dir1 = BTN_RT3, .button_dir2 = BTN_RT5, .socd_type = SOCD_2IP_NO_REAC },
+    SocdPair { .button_dir1 = BTN_RT2, .button_dir2 = BTN_RT4, .socd_type = SOCD_2IP_NO_REAC },
+}
+```
+
+### Hitbox-Style Fighting Game
+
+```cpp
+.socd_pairs = {
+    SocdPair { .button_dir1 = BTN_LF3, .button_dir2 = BTN_LF1, .socd_type = SOCD_NEUTRAL },
+    SocdPair { .button_dir1 = BTN_LF2, .button_dir2 = BTN_LT1, .socd_type = SOCD_NEUTRAL },
+}
+```
+
+### Minimal (Left/Right Only)
+
+```cpp
+.socd_pairs = {
+    SocdPair { .button_dir1 = BTN_LF3, .button_dir2 = BTN_LF1, .socd_type = SOCD_2IP },
+}
+```
+
+## Troubleshooting
+
+<Warning>
+**SOCD pairs must match your controller layout**
+
+Make sure your SOCD pairs correspond to actual opposing directions on your controller. Pairing non-opposing buttons will not cause errors, but won't provide useful SOCD resolution.
+</Warning>
+
+### Testing Your SOCD Configuration
+
+1. **Use an input viewer** (built-in B0XX viewer or external tool)
+2. **Test each SOCD pair individually**:
+   - Hold button 1, then press button 2
+   - Release button 2, check if button 1 reactivates (for 2IP) or stays neutral (for 2IP_NO_REAC)
+3. **Test rapid alternation** between directions
+4. **Verify tournament legality** if competing
+
+## See Also
+
+- [Mode Selection](/customization/mode-selection) - Configure mode switching bindings
+- [Console Selection](/customization/console-selection) - Backend configuration
+- [Creating Custom Modes](/customization/controller-modes) - Build modes with custom SOCD logic

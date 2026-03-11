@@ -1,0 +1,303 @@
+---
+title: GamecubeBackend
+description: GameCube console communication backend using Joybus protocol
+icon: plug
+---
+
+## Overview
+
+The `GamecubeBackend` class implements the Joybus protocol for communicating with GameCube consoles. It handles bidirectional communication over a single data line, responding to console polls and sending controller state.
+
+<Note>
+  The GameCube backend uses hardware-specific features: PIO state machines on Pico and bit-banging on Arduino.
+</Note>
+
+## Platform Support
+
+- **Raspberry Pi Pico**: ✅ Supported (PIO-based)
+- **Arduino (AVR)**: ✅ Supported (Nintendo library)
+
+## Constructor
+
+### Raspberry Pi Pico
+
+```cpp
+GamecubeBackend(
+    InputState &inputs,
+    InputSource **input_sources,
+    size_t input_source_count,
+    uint data_pin,
+    PIO pio = pio0,
+    int sm = -1,
+    int offset = -1
+)
+```
+
+<ParamField path="inputs" type="InputState&" required>
+  Reference to the global input state structure.
+</ParamField>
+
+<ParamField path="input_sources" type="InputSource**" required>
+  Array of pointers to input source objects.
+</ParamField>
+
+<ParamField path="input_source_count" type="size_t" required>
+  Number of elements in the `input_sources` array.
+</ParamField>
+
+<ParamField path="data_pin" type="uint" required>
+  GPIO pin number for the Joybus data line (bidirectional communication).
+</ParamField>
+
+<ParamField path="pio" type="PIO" default="pio0">
+  PIO block to use for Joybus communication (pio0 or pio1).
+</ParamField>
+
+<ParamField path="sm" type="int" default="-1">
+  State machine index to use. -1 for automatic allocation.
+</ParamField>
+
+<ParamField path="offset" type="int" default="-1">
+  Program offset in PIO instruction memory. -1 for automatic allocation.
+</ParamField>
+
+### Arduino (AVR)
+
+```cpp
+GamecubeBackend(
+    InputState &inputs,
+    InputSource **input_sources,
+    size_t input_source_count,
+    int polling_rate,
+    int data_pin
+)
+```
+
+<ParamField path="polling_rate" type="int" required>
+  Expected polling rate from the console in Hz (typically 125 or 200). Set to 0 to disable delay compensation.
+</ParamField>
+
+<ParamField path="data_pin" type="int" required>
+  Arduino pin number for the Joybus data line.
+</ParamField>
+
+<Info>
+  The AVR version uses the polling rate to calculate optimal timing delays, ensuring reports are ready just before the next poll.
+</Info>
+
+## Configuration Example
+
+```cpp
+// Pico configuration
+const Pinout pinout = {
+    .joybus_data = 28,  // GPIO 28 for data line
+    // ... other pins
+};
+
+GamecubeBackend gc_backend(
+    inputs,
+    input_sources,
+    input_source_count,
+    pinout.joybus_data  // data_pin
+);
+```
+
+```cpp
+// Arduino configuration
+GamecubeBackend gc_backend(
+    inputs,
+    input_sources,
+    input_source_count,
+    125,  // polling_rate (125 Hz)
+    2     // data_pin (Arduino pin 2)
+);
+```
+
+## Backend ID
+
+```cpp
+CommunicationBackendId BackendId() {
+    return COMMS_BACKEND_GAMECUBE;
+}
+```
+
+## SendReport Method
+
+```cpp
+void SendReport();
+```
+
+The `SendReport()` method implements the GameCube polling response protocol:
+
+### Pico Implementation
+
+1. Scans slow and medium-speed inputs
+2. Waits for console poll start signal
+3. Delays 40μs to optimize timing
+4. Scans fast inputs (maximum 40μs old when sending)
+5. Updates output state based on game mode
+6. Maps outputs to GameCube report format
+7. Sends report if poll command is valid
+
+```cpp
+ScanInputs(InputScanSpeed::SLOW);
+ScanInputs(InputScanSpeed::MEDIUM);
+
+_gamecube.WaitForPollStart();
+
+busy_wait_us(40);
+ScanInputs(InputScanSpeed::FAST);
+
+UpdateOutputs();
+
+if (_gamecube.WaitForPollEnd() != PollStatus::ERROR) {
+    _gamecube.SendReport(&_report);
+}
+```
+
+### Arduino Implementation
+
+1. Scans all inputs at once
+2. Updates output state based on game mode
+3. Maps outputs to GameCube report format
+4. Sends report to console
+5. Delays until just before next expected poll
+
+```cpp
+ScanInputs();
+UpdateOutputs();
+
+_gamecube.write(_data);
+
+delayMicroseconds(_delay);
+```
+
+## Report Structure
+
+GameCube controllers report the following:
+
+### Digital Buttons
+- A, B, X, Y
+- Z (mapped from buttonR)
+- L, R (trigger digital)
+- Start
+- D-pad: Up, Down, Left, Right
+
+### Analog Inputs
+- Main stick: X/Y (0-255, 128 = center)
+- C-stick: X/Y (0-255, 128 = center)
+- L trigger analog (0-255)
+- R trigger analog (0-255)
+
+### Special Mappings
+
+```cpp
+// Select and Home mapped to D-pad
+_report.dpad_left = _outputs.dpadLeft | _outputs.select;
+_report.dpad_right = _outputs.dpadRight | _outputs.home;
+```
+
+<Warning>
+  The Select button is mapped to D-pad Left and Home is mapped to D-pad Right since GameCube controllers don't have these buttons natively.
+</Warning>
+
+## Polling Rate and Timing
+
+### Pico (PIO-based)
+- Uses hardware state machines for precise timing
+- Automatically synchronizes with console polls
+- 40μs optimization window for minimal input lag
+
+### Arduino (Software-based)
+- Requires manual polling rate configuration
+- Calculates delay: `(1000000 / polling_rate) - 850`
+- Leaves 850μs for processing before next poll
+
+## GetOffset Method (Pico Only)
+
+```cpp
+int GetOffset();
+```
+
+Returns the PIO program offset, useful for sharing PIO resources between multiple backends.
+
+## Hardware Requirements
+
+### Signal Line
+- **Voltage**: 3.3V logic (use level shifter if needed)
+- **Pull-up**: 1kΩ resistor to 3.3V
+- **Cable**: Connect to controller port data line
+
+### Pin Configuration
+- Bidirectional data line (input/output)
+- Must support fast GPIO operations
+- Pico: Any GPIO pin
+- Arduino: Pin 2 recommended (interrupt capable)
+
+## Usage Example
+
+```cpp
+#include "comms/GamecubeBackend.hpp"
+
+const Pinout pinout = {
+    .joybus_data = 28,
+};
+
+static InputState inputs;
+static InputSource *input_sources[] = { &gpio_input };
+size_t input_source_count = 1;
+
+// Pico
+GamecubeBackend gc_backend(
+    inputs,
+    input_sources,
+    input_source_count,
+    pinout.joybus_data
+);
+
+// Arduino
+GamecubeBackend gc_backend(
+    inputs,
+    input_sources,
+    input_source_count,
+    125,              // 125 Hz polling
+    2                 // Pin 2
+);
+
+void loop() {
+    gc_backend.SendReport();
+}
+```
+
+## Console Detection
+
+The GameCube backend can be automatically selected based on console detection:
+
+```cpp
+CommunicationBackendConfig backend_config = {
+    .backend_id = COMMS_BACKEND_GAMECUBE,
+};
+```
+
+## Performance Notes
+
+- **Pico**: Uses hardware PIO for precise timing, minimal CPU overhead
+- **Arduino**: Software-based, requires careful timing calibration
+- **Polling delay**: Optimized to minimize latency while ensuring stability
+- **Input lag**: Typically under 1ms with proper configuration
+
+## Troubleshooting
+
+<Note>
+  If the console doesn't detect the controller:
+  - Check data pin connection and pull-up resistor
+  - Verify voltage levels (3.3V for Pico)
+  - Ensure polling rate matches console (125-200 Hz)
+  - Check for proper grounding between controller and console
+</Note>
+
+## See Also
+
+- [N64Backend](/api/comms/n64) - Similar Joybus protocol for N64
+- [Communication Backends](/usage/communication-backends) - Backend selection guide
+- [Pinouts](/hardware/pinouts) - Hardware pin mapping

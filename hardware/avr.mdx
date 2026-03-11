@@ -1,0 +1,502 @@
+---
+title: AVR Support
+description: Arduino and ATMega32U4-based controller support in HayBox
+---
+
+HayBox has extensive support for AVR-based microcontrollers, particularly the ATMega32U4 found in Arduino Leonardo, Pro Micro, and many commercial fightstick PCBs. While AVR controllers have limitations compared to RP2040, they are proven, reliable, and widely available.
+
+## Supported AVR Microcontrollers
+
+<CardGroup cols={2}>
+  <Card title="ATMega32U4" icon="microchip">
+    **USB-capable AVR** (Leonardo, Pro Micro, Teensy 2.0)
+    - 16 MHz
+    - 2.5 KB RAM
+    - 32 KB Flash
+    - Native USB
+    - **Most common for controllers**
+  </Card>
+  
+  <Card title="ATMega328P" icon="chip">
+    **Classic Arduino** (Uno, Nano)
+    - 16 MHz
+    - 2 KB RAM
+    - 32 KB Flash
+    - No native USB (requires USB-serial adapter)
+    - Good for console-only builds
+  </Card>
+  
+  <Card title="ATMega2560" icon="server">
+    **Arduino Mega**
+    - 16 MHz
+    - 8 KB RAM
+    - 256 KB Flash
+    - More GPIO pins
+    - Used in Smash Box
+  </Card>
+  
+  <Card title="ATMega16U2" icon="microchip">
+    **USB-to-Serial Chip**
+    - Often found on Arduino Uno/Mega
+    - Can be reprogrammed for USB HID
+    - Advanced use case
+  </Card>
+</CardGroup>
+
+## Why Choose AVR?
+
+Despite being older and slower than RP2040, AVR has advantages:
+
+✅ **Mature and proven** - Decades of development and testing  
+✅ **Widely available** - Easy to source, even during chip shortages  
+✅ **Extensive ecosystem** - Huge Arduino community and libraries  
+✅ **Lower cost** - Pro Micro clones as cheap as $3-4  
+✅ **Compatibility** - Works with existing B0XX, LBX, GCCPCB designs  
+✅ **Sufficient for most users** - 1-2ms latency is excellent for competitive play
+
+## Controllers Using AVR
+
+Many popular controllers use ATMega32U4:
+
+- **B0XX R1** - Original B0XX (Leonardo)
+- **B0XX R2** - Second-gen B0XX (Leonardo)
+- **LBX** - Low Budget Box (Leonardo or Pro Micro)
+- **GCCPCB1 & GCCPCB2** - Crane's GameCube PCB (Leonardo)
+- **GCCMX** - MX-switch GameCube PCB (Leonardo)
+- **Smash Box** - Hit Box Arcade Smash Box (Mega)
+
+## AVR Platform Variants
+
+HayBox defines two AVR platform configurations:
+
+### AVR USB (`avr_usb`)
+
+**For microcontrollers with native USB** (ATMega32U4, ATMega16U2)
+
+```ini
+[avr_usb]
+extends = avr_base
+build_flags =
+    ${avr_base.build_flags}
+    -I HAL/avr/avr_usb/include
+lib_deps =
+    ${avr_base.lib_deps}
+    # USB HID libraries
+    https://github.com/JonnyHaystack/ArduinoJoystickLibrary
+    https://github.com/JonnyHaystack/ArduinoKeyboard
+```
+
+**Supports:**
+- ✅ USB gamepad (DInput, XInput via software)
+- ✅ USB keyboard
+- ✅ GameCube/N64 console
+- ✅ Mode switching
+- ✅ B0XX input viewer
+
+**Examples:** Leonardo, Pro Micro, Teensy 2.0
+
+### AVR No-USB (`avr_nousb`)
+
+**For microcontrollers without native USB** (ATMega328P, ATMega2560)
+
+```ini
+[avr_nousb]
+extends = avr_base
+build_flags =
+    ${avr_base.build_flags}
+    -I HAL/avr/avr_nousb/include
+build_src_filter =
+    ${avr_base.build_src_filter}
+    +<HAL/avr/avr_nousb/src>
+    -<src/comms/IntegratedDisplay.cpp>  # Excluded to save space
+    -<src/core/mode_selection.cpp>      # Excluded to save space
+```
+
+**Supports:**
+- ✅ GameCube/N64 console (via Joybus)
+- ✅ NES console
+- ❌ USB (unless using custom USB-serial firmware)
+- ❌ Mode switching (single mode compiled in)
+
+**Examples:** Uno, Nano, Mega (without USB reprogramming)
+
+<Note>
+The Mega has USB hardware but requires special configuration to use it for HID. By default, it uses `avr_nousb` and the USB port is only for programming.
+</Note>
+
+## Building for AVR
+
+### PlatformIO Configuration
+
+From `platformio.ini`:
+
+```ini
+[avr_base]
+platform = atmelavr
+framework = arduino
+build_unflags = -std=gnu++11
+build_flags =
+    ${env.build_flags}
+    -std=gnu++17          # Modern C++ standard
+    -Os                   # Optimize for size
+    -fdata-sections       # Enable garbage collection
+    -ffunction-sections
+    -fno-sized-deallocation
+    -flto                 # Link-time optimization
+    -fshort-enums        # Save RAM with smaller enums
+    -Wl,--gc-sections    # Remove unused code
+    -I HAL/avr/include
+    -D PB_BUFFER_ONLY     # Protobuf optimization
+    -D PB_WITHOUT_64BIT   # Save space, no 64-bit
+    -D PB_NO_ERRMSG       # Disable error strings
+
+lib_deps =
+    nicohood/Nintendo@^1.4.0  # GameCube/N64 support
+    Wire                       # I2C for Nunchuk
+    https://github.com/JonnyHaystack/arduino-nunchuk
+```
+
+### Compiling an AVR Config
+
+<Tabs>
+  <Tab title="PlatformIO IDE">
+    1. Open HayBox project in VS Code with PlatformIO
+    2. Select your environment from the bottom toolbar:
+       - `b0xx_r1`, `b0xx_r2` (Leonardo)
+       - `gccpcb1`, `gccpcb2` (Leonardo)
+       - `lbx` (Leonardo/Pro Micro)
+       - `arduino_leonardo`, `arduino_micro`, etc.
+    3. Click Build (checkmark icon)
+    4. Output `.hex` file will be in `.pio/build/[env_name]/`
+  </Tab>
+  
+  <Tab title="Command Line">
+    ```bash
+    # Build for B0XX R1
+    pio run -e b0xx_r1
+    
+    # Build for GCCPCB1
+    pio run -e gccpcb1
+    
+    # Build for LBX
+    pio run -e lbx
+    
+    # Build all AVR configs
+    pio run -e b0xx_r1 -e b0xx_r2 -e gccpcb1 -e gccpcb2 -e lbx
+    ```
+  </Tab>
+</Tabs>
+
+### Memory Usage
+
+AVR has strict memory limits. After building, check the output:
+
+```
+RAM:   [========= ]  92.3% (used 2356 bytes from 2560 bytes)
+Flash: [========= ]  88.1% (used 25124 bytes from 28672 bytes)
+```
+
+<Warning>
+**If RAM usage exceeds ~95%**, the firmware may be unstable. Consider:
+- Removing unused features
+- Disabling mode selection (compile single mode)
+- Reducing number of game modes
+- Optimizing configuration structs
+</Warning>
+
+## Flashing AVR Firmware
+
+### Using QMK Toolbox (Recommended)
+
+1. Download [QMK Toolbox](https://github.com/qmk/qmk_toolbox/releases)
+2. Open QMK Toolbox
+3. Load your `.hex` file
+4. Select **ATmega32U4** (or your chip) from dropdown
+5. Put board into bootloader mode:
+   - **Leonardo/Pro Micro**: Press reset button twice quickly
+   - **Teensy**: Press the button on the board
+6. Click **Flash** when device is detected
+
+### Using avrdude (Command Line)
+
+```bash
+# Detect the port (Linux)
+ls /dev/ttyACM*
+
+# Flash Leonardo/Pro Micro
+avrdude -p atmega32u4 -c avr109 -P /dev/ttyACM0 -U flash:w:firmware.hex
+
+# Flash with automatic reset (if supported)
+pio run -e b0xx_r1 --target upload
+```
+
+### Bootloader Entry
+
+HayBox includes safe bootloader entry:
+
+```cpp
+// In setup() - hold designated button during plugin
+if (inputs.rt2) {
+    Serial.begin(115200);
+    reboot_bootloader();  // Enters bootloader mode
+}
+```
+
+**To reflash:**
+1. Hold RT2 (or configured button)
+2. Plug in controller
+3. Controller enters bootloader automatically
+4. Flash with QMK Toolbox or avrdude
+
+<Note>
+On AVR, this feature requires starting the Serial interface, which adds a small amount of latency. Some competitive players disable this feature for minimal latency gains.
+</Note>
+
+## AVR Limitations
+
+Be aware of these constraints when using AVR:
+
+### Memory Constraints
+
+| Resource | ATMega32U4 | Impact |
+|----------|------------|--------|
+| RAM | 2.5 KB | Limits game modes, configs, features |
+| Flash | 32 KB | Tight fit with all features enabled |
+| EEPROM | 1 KB | Limited config storage |
+
+**Features excluded on AVR** (in `build_src_filter`):
+- Integrated display support (`-<src/comms/IntegratedDisplay.cpp>`)
+- Mode selection (on `avr_nousb` only)
+
+### Performance Limitations
+
+- **Single core** - All processing on one 16 MHz core
+- **Bit-banging Joybus** - GameCube/N64 uses CPU, not hardware PIO
+- **Lower polling precision** - USB timing less consistent than RP2040
+- **Higher latency** - 1-2ms typical (vs 0.5-1ms on RP2040)
+
+### Pin Limitations
+
+| Board | Usable GPIO | Notes |
+|-------|-------------|-------|
+| Pro Micro | ~18 pins | Compact but fewer pins |
+| Leonardo | ~20 pins | Standard choice |
+| Mega | ~54 pins | Many pins but no native USB |
+
+<Warning>
+On ATMega32U4, some pins (like D2/D3) have special functions (interrupts). While they *can* be used for buttons, it's best to avoid them if possible.
+</Warning>
+
+## AVR Pin Mapping Example
+
+From B0XX R1 configuration:
+
+```cpp
+const GpioButtonMapping button_mappings[] = {
+    { BTN_LF4, 7  },   // Digital pin 7
+    { BTN_LF3, 15 },
+    { BTN_LF2, 16 },
+    { BTN_LF1, 14 },
+
+    { BTN_LT1, 6  },
+    { BTN_LT2, 8  },
+
+    { BTN_MB1, 12 },
+
+    { BTN_RT3, A1 },   // Analog pins as digital GPIO
+    { BTN_RT4, A2 },
+    { BTN_RT2, 5  },
+    { BTN_RT1, 13 },
+    { BTN_RT5, A0 },
+
+    { BTN_RF1, 4  },
+    { BTN_RF2, A5 },
+    { BTN_RF3, A4 },
+    { BTN_RF4, A3 },
+
+    { BTN_RF5, 0  },
+    { BTN_RF6, 1  },
+};
+
+const Pinout pinout = {
+    .joybus_data = 17,  // Must be interrupt-capable for reliable Joybus
+    .nes_data = 0,
+    .nes_clock = 0,
+    .nes_latch = 0,
+    .mux = -1,
+    .nunchuk_detect = -1,
+    .nunchuk_sda = -1,
+    .nunchuk_scl = -1,
+};
+```
+
+See the [Pinouts](/hardware/pinouts) page for more details.
+
+## Input Sources on AVR
+
+AVR configs typically use simpler input handling:
+
+```cpp
+// Simple GPIO input (no debouncing to save RAM)
+static GpioButtonInput gpio_input(button_mappings, button_count);
+
+// In setup()
+gpio_input.UpdateInputs(inputs);
+
+// In loop()
+gpio_input.UpdateInputs(inputs);  // Called every frame
+```
+
+RP2040 configs use debounced input with template-based sizing:
+
+```cpp
+// With compile-time sizing and debouncing
+DebouncedGpioButtonInput<button_count> gpio_input(button_mappings);
+```
+
+## Nunchuk Support
+
+AVR boards can use Wii Nunchuk for analog input:
+
+```cpp
+#include "input/NunchukInput.hpp"
+
+// Create Nunchuk BEFORE GPIO input (order matters for I2C)
+static NunchukInput nunchuk;
+
+static InputSource *input_sources[] = {
+    &gpio_input,
+    &nunchuk,  // Adds analog stick + C/Z buttons
+};
+
+const Pinout pinout = {
+    .nunchuk_detect = 2,  // Optional detection pin
+    .nunchuk_sda = A4,    // I2C data (don't use A4 for buttons)
+    .nunchuk_scl = A5,    // I2C clock (don't use A5 for buttons)
+};
+```
+
+<Note>
+The Nunchuk uses I2C on pins A4 (SDA) and A5 (SCL). These pins cannot be used for buttons when Nunchuk is enabled.
+</Note>
+
+## Optimizing for AVR
+
+To maximize performance and minimize memory usage:
+
+### Reduce Game Modes
+
+Edit `config_defaults.hpp` to include only needed modes:
+
+```cpp
+// Instead of all modes:
+GameModeConfig game_mode_configs[] = {
+    melee_mode,
+    pm_mode,
+    ultimate_mode,
+    // ...
+};
+
+// Use only what you need:
+GameModeConfig game_mode_configs[] = {
+    melee_mode,  // Just Melee
+};
+```
+
+### Disable Unused Features
+
+```cpp
+// In config.cpp, comment out unused input sources:
+// static NunchukInput nunchuk;  // Don't need Nunchuk
+
+static InputSource *input_sources[] = {
+    &gpio_input,
+    // &nunchuk,  // Commented out
+};
+```
+
+### Compiler Optimizations
+
+Already included in `platformio.ini`:
+
+- `-Os` - Optimize for size
+- `-flto` - Link-time optimization (removes unused code)
+- `-Wl,--gc-sections` - Garbage collection of unused functions
+- `-fshort-enums` - Use smallest integer type for enums
+
+## Troubleshooting
+
+### "Not enough memory" error
+
+```
+Error: Not enough memory; see http://www.arduino.cc/en/Guide/Troubleshooting#size
+```
+
+**Solutions:**
+- Remove unused game modes
+- Disable mode selection (compile single mode)
+- Use `avr_nousb` if you don't need USB
+- Simplify SOCD configurations
+
+### Bootloader won't activate
+
+- Press reset button **twice quickly** (Leonardo/Pro Micro)
+- Check if bootloader entry code is enabled
+- Verify button held is correct (usually RT2)
+- Try manual reset button on board
+
+### Joybus unreliable on console
+
+- Verify joybus_data pin is correct
+- Use shorter wires (under 6 inches)
+- Add 100Ω series resistor on data line
+- Check GameCube cable pinout
+- Test with different polling rate settings
+
+### USB not detected
+
+- Verify you're using `avr_usb` config (not `avr_nousb`)
+- Check USB cable supports data (not charge-only)
+- Try different USB port
+- Reflash bootloader if corrupted
+
+## Comparison: AVR vs RP2040
+
+| Feature | AVR (ATMega32U4) | RP2040 |
+|---------|------------------|--------|
+| Clock speed | 16 MHz | 133-200 MHz |
+| Cores | 1 | 2 |
+| RAM | 2.5 KB | 264 KB |
+| Flash | 32 KB | 2 MB |
+| GPIO | ~20 pins | 26+ pins |
+| Input latency | 1-2 ms | 0.5-1 ms |
+| Price | $3-8 | $4-6 |
+| Availability | Excellent | Good |
+| Joybus | Bit-bang | PIO (hardware) |
+| Display support | No | Yes |
+| RGB LED | Limited | Full FastLED |
+| Config storage | 1KB EEPROM | Flash filesystem |
+
+## When to Use AVR
+
+✅ **Use AVR if:**
+- You're building for an existing AVR-based design (B0XX R1/R2, LBX, GCCPCB)
+- You want maximum compatibility with existing hardware
+- You're on a tight budget
+- You don't need advanced features (display, RGB, many modes)
+- Your button count is ≤20
+
+❌ **Consider RP2040 instead if:**
+- You want the lowest possible latency
+- You need many game modes or configurations
+- You want OLED display or RGB LED support
+- You're designing new hardware from scratch
+- You need >20 buttons
+
+## Resources
+
+- [ATMega32U4 Datasheet](https://ww1.microchip.com/downloads/en/DeviceDoc/Atmel-7766-8-bit-AVR-ATmega16U4-32U4_Datasheet.pdf)
+- [Arduino Leonardo Pinout](https://docs.arduino.cc/hardware/leonardo)
+- [Pro Micro Pinout](https://learn.sparkfun.com/tutorials/pro-micro--fio-v3-hookup-guide/hardware-overview-pro-micro)
+- [Arduino Language Reference](https://www.arduino.cc/reference/en/)
+- [QMK Toolbox](https://github.com/qmk/qmk_toolbox)

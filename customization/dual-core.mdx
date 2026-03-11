@@ -1,0 +1,361 @@
+---
+title: Dual-Core Processing
+description: Use the Raspberry Pi Pico's second core for parallel input reading and processing
+---
+
+The Raspberry Pi Pico (RP2040) has two ARM Cortex-M0+ cores. HayBox allows you to utilize both cores to improve performance by running input reading and other tasks in parallel.
+
+## Overview
+
+By default, the `setup()` and `loop()` functions execute on **core0**. On Pico/RP2040, you can add `setup1()` and `loop1()` functions to run tasks on **core1**.
+
+<CardGroup cols={2}>
+  <Card title="Core0" icon="microchip">
+    Main firmware logic, mode selection, and communication backends
+  </Card>
+  <Card title="Core1" icon="microchip">
+    Input reading, especially slow input sources like Nunchuk or GameCube controllers
+  </Card>
+</CardGroup>
+
+## Why Use Dual-Core?
+
+Some input sources have a "slow" scan speed, meaning they take considerable time to read:
+
+- **NunchukInput** - I2C communication is relatively slow
+- **GamecubeControllerInput** - Controller polling takes time
+
+Fast input sources (like GPIO buttons) are read at the last possible moment for minimal latency. Slow input sources need to be read earlier, but this wastes time on the main core. By reading slow inputs continuously on core1, you maximize responsiveness without blocking the main firmware loop.
+
+<Warning>
+This feature is only available on **Pico/RP2040** boards. AVR microcontrollers (like Arduino-based boards) are single-core and cannot use this feature.
+</Warning>
+
+## Basic Structure
+
+### Core0 (Main)
+
+```cpp config.cpp
+void setup() {
+    // Initialize communication backends
+    // Set up fast input sources
+    // Configure modes
+}
+
+void loop() {
+    // Mode selection
+    // Send reports to backends
+}
+```
+
+### Core1 (Secondary)
+
+```cpp config.cpp
+void setup1() {
+    // Wait for core0 initialization
+    // Initialize slow input sources
+}
+
+void loop1() {
+    // Continuously read inputs
+}
+```
+
+## Core Synchronization
+
+Core1 must wait for core0 to finish initialization before accessing shared resources:
+
+```cpp
+void setup1() {
+    // Wait until backends array is initialized by core0
+    while (backends == nullptr) {
+        tight_loop_contents();
+    }
+    
+    // Now safe to initialize input sources
+}
+```
+
+<Note>
+The `tight_loop_contents()` function is a Pico SDK function that executes a minimal wait loop without wasting power.
+</Note>
+
+## Examples
+
+### Reading GPIO Buttons on Core1
+
+The default Pico config reads GPIO buttons on core1 for optimal latency:
+
+<CodeGroup>
+```cpp config/pico/config.cpp
+GpioButtonMapping button_mappings[] = {
+    { BTN_LF1, 2  },
+    { BTN_LF2, 3  },
+    { BTN_LF3, 4  },
+    { BTN_LF4, 5  },
+    // ... more button mappings
+};
+const size_t button_count = sizeof(button_mappings) / sizeof(GpioButtonMapping);
+
+DebouncedGpioButtonInput<button_count> gpio_input(button_mappings);
+
+CommunicationBackend **backends = nullptr;
+size_t backend_count;
+KeyboardMode *current_kb_mode = nullptr;
+
+void setup() {
+    static InputState inputs;
+
+    // Create GPIO input source and read initial states
+    gpio_input.UpdateInputs(inputs);
+
+    // Check bootsel button hold
+    if (inputs.rt2) {
+        reboot_bootloader();
+    }
+
+    // Initialize backends
+    static InputSource *input_sources[] = {};
+    size_t input_source_count = sizeof(input_sources) / sizeof(InputSource *);
+
+    backend_count = initialize_backends(
+        backends, inputs, input_sources, input_source_count, config, pinout
+    );
+
+    setup_mode_activation_bindings(config.game_mode_configs, config.game_mode_configs_count);
+}
+
+void loop() {
+    select_mode(backends, backend_count, config);
+
+    for (size_t i = 0; i < backend_count; i++) {
+        backends[i]->SendReport();
+    }
+
+    if (current_kb_mode != nullptr) {
+        current_kb_mode->SendReport(backends[0]->GetInputs());
+    }
+}
+
+/* Button inputs are read from the second core */
+
+void setup1() {
+    while (backends == nullptr) {
+        tight_loop_contents();
+    }
+}
+
+void loop1() {
+    if (backends != nullptr) {
+        gpio_input.UpdateInputs(backends[0]->GetInputs());
+    }
+}
+```
+</CodeGroup>
+
+### Reading GameCube Controller on Core1
+
+This example shows how to read GameCube controller inputs on core1:
+
+<CodeGroup>
+```cpp GameCube Controller Example
+const int gcc_pin = 28;
+GamecubeControllerInput *gcc = nullptr;
+
+void setup() {
+    static InputState inputs;
+    
+    // Initialize backends on core0
+    static InputSource *input_sources[] = {};
+    backend_count = initialize_backends(
+        backends, inputs, input_sources, 0, config, pinout
+    );
+}
+
+void loop() {
+    select_mode(backends, backend_count, config);
+    
+    for (size_t i = 0; i < backend_count; i++) {
+        backends[i]->SendReport();
+    }
+}
+
+void setup1() {
+    // Wait for core0 to finish initialization
+    while (backends == nullptr) {
+        tight_loop_contents();
+    }
+
+    // Create GameCube controller input source
+    // Polling rate: 2500Hz
+    // Use pio1 to avoid conflicts with GamecubeBackend on pio0
+    gcc = new GamecubeControllerInput(gcc_pin, 2500, pio1);
+}
+
+void loop1() {
+    if (backends != nullptr) {
+        // Continuously poll GameCube controller
+        gcc->UpdateInputs(backends[0]->GetInputs());
+    }
+}
+```
+</CodeGroup>
+
+<Note>
+When using both `GamecubeControllerInput` and `GamecubeBackend`, make sure they use different PIO instances (pio0 and pio1) to avoid conflicts.
+</Note>
+
+### Reading Nunchuk on Core1
+
+The README example shows how to read Wii Nunchuk inputs on core1:
+
+<CodeGroup>
+```cpp Nunchuk Example
+NunchukInput *nunchuk = nullptr;
+
+void setup() {
+    static InputState inputs;
+    
+    // Initialize backends
+    static InputSource *input_sources[] = {};
+    backend_count = initialize_backends(
+        backends, inputs, input_sources, 0, config, pinout
+    );
+}
+
+void loop() {
+    select_mode(backends, backend_count, config);
+    
+    for (size_t i = 0; i < backend_count; i++) {
+        backends[i]->SendReport();
+    }
+}
+
+void setup1() {
+    // Wait for core0 initialization
+    while (backends == nullptr) {
+        tight_loop_contents();
+    }
+
+    // Initialize Nunchuk with I2C pins
+    nunchuk = new NunchukInput(Wire, -1, 4, 5);
+}
+
+void loop1() {
+    if (backends != nullptr) {
+        // Continuously read Nunchuk inputs
+        nunchuk->UpdateInputs(backends[0]->GetInputs());
+    }
+}
+```
+</CodeGroup>
+
+<Warning>
+Nunchuk communication over I2C is slow, so it's ideal for continuous reading on core1 while core0 handles the main firmware logic.
+</Warning>
+
+### Two-Player Arcade Cabinet
+
+As a hypothetical example, you could even power all the controls for a two-player arcade cabinet using a single Pico:
+
+<CodeGroup>
+```cpp Two-Player Arcade Example
+// Player 1 switch matrix
+const size_t p1_rows = 5;
+const size_t p1_cols = 10;
+const uint p1_row_pins[p1_rows] = { 0, 1, 2, 3, 4 };
+const uint p1_col_pins[p1_cols] = { 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 };
+Button p1_matrix[p1_rows][p1_cols] = { /* ... */ };
+
+SwitchMatrixInput<p1_rows, p1_cols> p1_input(
+    p1_row_pins, p1_col_pins, p1_matrix, DiodeDirection::COL2ROW
+);
+
+// Player 2 switch matrix  
+const size_t p2_rows = 5;
+const size_t p2_cols = 10;
+const uint p2_row_pins[p2_rows] = { 15, 16, 17, 18, 19 };
+const uint p2_col_pins[p2_cols] = { 20, 21, 22, 26, 27, 28, 29, 30, 31, 32 };
+Button p2_matrix[p2_rows][p2_cols] = { /* ... */ };
+
+SwitchMatrixInput<p2_rows, p2_cols> p2_input(
+    p2_row_pins, p2_col_pins, p2_matrix, DiodeDirection::COL2ROW
+);
+
+// Two GameCube backends for two players
+CommunicationBackend *p1_backend = nullptr;
+CommunicationBackend *p2_backend = nullptr;
+
+void setup() {
+    // Initialize player 1 backend on GameCube port 1
+    // Using pio0
+}
+
+void loop() {
+    // Handle player 1 on core0
+    p1_input.UpdateInputs(p1_backend->GetInputs());
+    p1_backend->SendReport();
+}
+
+void setup1() {
+    while (p1_backend == nullptr) {
+        tight_loop_contents();
+    }
+    
+    // Initialize player 2 backend on GameCube port 2
+    // Using pio1 to avoid conflicts
+}
+
+void loop1() {
+    // Handle player 2 on core1
+    if (p1_backend != nullptr) {
+        p2_input.UpdateInputs(p2_backend->GetInputs());
+        p2_backend->SendReport();
+    }
+}
+```
+</CodeGroup>
+
+<Note>
+This example demonstrates the power of dual-core processing - you can run completely independent controller setups on each core!
+</Note>
+
+## Best Practices
+
+<Steps>
+  <Step title="Identify Slow Input Sources">
+    Check the `ScanSpeed()` of your input sources. Use core1 for `InputScanSpeed::SLOW` sources.
+  </Step>
+  
+  <Step title="Wait for Initialization">
+    Always use `while (backends == nullptr)` in `setup1()` to ensure core0 has finished initialization.
+  </Step>
+  
+  <Step title="Avoid Resource Conflicts">
+    When using PIO-based inputs (GameCube, N64), ensure different instances use different PIOs or the same memory offset.
+  </Step>
+  
+  <Step title="Minimize Shared State">
+    While you can access shared variables from both cores, minimize shared state to avoid synchronization issues.
+  </Step>
+</Steps>
+
+## Limitations
+
+<Warning>
+**AVR/Arduino boards** (like ATMega32U4-based controllers) are single-core and cannot use `setup1()` and `loop1()`. These functions will be ignored on AVR platforms.
+</Warning>
+
+## The Possibilities Are Endless
+
+The dual-core architecture of the RP2040 opens up many creative possibilities:
+
+- Mixed input controllers (Nunchuk + buttons)
+- Multiple controller support from a single Pico
+- Parallel processing of different input methods
+- Background tasks like LED animations or display updates
+- Complex input processing without affecting main loop timing
+
+<Note>
+For more information on input sources and their scan speeds, see [Input Sources](/customization/input-sources).
+</Note>

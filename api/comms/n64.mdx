@@ -1,0 +1,349 @@
+---
+title: N64Backend
+description: Nintendo 64 console communication backend using Joybus protocol
+icon: plug
+---
+
+## Overview
+
+The `N64Backend` class implements the Joybus protocol for communicating with Nintendo 64 consoles. It handles bidirectional communication over a single data line, responding to console polls and sending controller state.
+
+<Note>
+  The N64 backend uses the same Joybus protocol family as GameCube but with a different report format and timing characteristics.
+</Note>
+
+## Platform Support
+
+- **Raspberry Pi Pico**: ✅ Supported (PIO-based)
+- **Arduino (AVR)**: ✅ Supported (Nintendo library)
+
+## Constructor
+
+### Raspberry Pi Pico
+
+```cpp
+N64Backend(
+    InputState &inputs,
+    InputSource **input_sources,
+    size_t input_source_count,
+    uint data_pin,
+    PIO pio = pio0,
+    int sm = -1,
+    int offset = -1
+)
+```
+
+<ParamField path="inputs" type="InputState&" required>
+  Reference to the global input state structure.
+</ParamField>
+
+<ParamField path="input_sources" type="InputSource**" required>
+  Array of pointers to input source objects.
+</ParamField>
+
+<ParamField path="input_source_count" type="size_t" required>
+  Number of elements in the `input_sources` array.
+</ParamField>
+
+<ParamField path="data_pin" type="uint" required>
+  GPIO pin number for the Joybus data line (bidirectional communication).
+</ParamField>
+
+<ParamField path="pio" type="PIO" default="pio0">
+  PIO block to use for Joybus communication (pio0 or pio1).
+</ParamField>
+
+<ParamField path="sm" type="int" default="-1">
+  State machine index to use. -1 for automatic allocation.
+</ParamField>
+
+<ParamField path="offset" type="int" default="-1">
+  Program offset in PIO instruction memory. -1 for automatic allocation.
+</ParamField>
+
+### Arduino (AVR)
+
+```cpp
+N64Backend(
+    InputState &inputs,
+    InputSource **input_sources,
+    size_t input_source_count,
+    int polling_rate,
+    int data_pin
+)
+```
+
+<ParamField path="polling_rate" type="int" required>
+  Expected polling rate from the console in Hz (typically 60-240). Set to 0 to disable delay compensation.
+</ParamField>
+
+<ParamField path="data_pin" type="int" required>
+  Arduino pin number for the Joybus data line.
+</ParamField>
+
+<Info>
+  The AVR version uses the polling rate to calculate optimal timing delays, ensuring reports are ready just before the next poll.
+</Info>
+
+## Configuration Example
+
+```cpp
+// Pico configuration
+const Pinout pinout = {
+    .joybus_data = 28,  // GPIO 28 for data line
+    // ... other pins
+};
+
+N64Backend n64_backend(
+    inputs,
+    input_sources,
+    input_source_count,
+    pinout.joybus_data  // data_pin
+);
+```
+
+```cpp
+// Arduino configuration
+N64Backend n64_backend(
+    inputs,
+    input_sources,
+    input_source_count,
+    240,  // polling_rate (240 Hz)
+    2     // data_pin (Arduino pin 2)
+);
+```
+
+## Backend ID
+
+```cpp
+CommunicationBackendId BackendId() {
+    return COMMS_BACKEND_N64;
+}
+```
+
+## SendReport Method
+
+```cpp
+void SendReport();
+```
+
+The `SendReport()` method implements the N64 polling response protocol:
+
+### Pico Implementation
+
+1. Scans slow and medium-speed inputs
+2. Waits for console poll signal
+3. Scans fast inputs immediately after poll
+4. Updates output state based on game mode
+5. Maps outputs to N64 report format
+6. Sends report to console
+
+```cpp
+ScanInputs(InputScanSpeed::SLOW);
+ScanInputs(InputScanSpeed::MEDIUM);
+
+_n64.WaitForPoll();
+
+ScanInputs(InputScanSpeed::FAST);
+
+UpdateOutputs();
+
+_n64.SendReport(&_report);
+```
+
+### Arduino Implementation
+
+1. Scans all inputs at once
+2. Updates output state based on game mode
+3. Maps outputs to N64 report format
+4. Sends report to console
+5. Delays until just before next expected poll
+
+```cpp
+ScanInputs();
+UpdateOutputs();
+
+_n64.write(_data);
+
+delayMicroseconds(_delay);
+```
+
+## Report Structure
+
+N64 controllers report the following:
+
+### Digital Buttons
+- A, B
+- Z (mapped from buttonR)
+- L, R (trigger digital)
+- Start
+- D-pad: Up, Down, Left, Right
+- C-buttons: C-Up, C-Down, C-Left, C-Right
+
+### Analog Input
+- Control stick: X/Y (signed 8-bit, -128 to +127)
+
+<Note>
+  Unlike GameCube, the N64 uses signed 8-bit integers for analog stick values, with 0 representing center position.
+</Note>
+
+### C-Button Mapping
+
+The right analog stick is mapped to the C-buttons:
+
+```cpp
+_report.c_left = _outputs.rightStickX < 128;
+_report.c_right = _outputs.rightStickX > 128;
+_report.c_down = _outputs.rightStickY < 128;
+_report.c_up = _outputs.rightStickY > 128;
+```
+
+<Info>
+  This allows modern analog sticks to control games expecting C-button digital input.
+</Info>
+
+### Analog Stick Conversion
+
+The firmware converts unsigned 8-bit stick values to signed:
+
+```cpp
+// Pico
+_report.stick_x = _outputs.leftStickX - 128;
+_report.stick_y = _outputs.leftStickY - 128;
+
+// Arduino
+_data.report.xAxis = _outputs.leftStickX - 128;
+_data.report.yAxis = _outputs.leftStickY - 128;
+```
+
+## Polling Rate and Timing
+
+### Pico (PIO-based)
+- Uses hardware state machines for precise timing
+- Automatically synchronizes with console polls
+- Immediate response to poll signal
+
+### Arduino (Software-based)
+- Requires manual polling rate configuration
+- Calculates delay: `(1000000 / polling_rate) - 850`
+- Leaves 850μs for processing before next poll
+- Typical N64 polling rates: 60-240 Hz
+
+## GetOffset Method (Pico Only)
+
+```cpp
+int GetOffset();
+```
+
+Returns the PIO program offset, useful for sharing PIO resources between multiple backends.
+
+## Hardware Requirements
+
+### Signal Line
+- **Voltage**: 3.3V logic (N64 uses 3.3V natively)
+- **Pull-up**: 1kΩ resistor to 3.3V
+- **Cable**: Connect to controller port data line
+
+### Pin Configuration
+- Bidirectional data line (input/output)
+- Must support fast GPIO operations
+- Pico: Any GPIO pin
+- Arduino: Pin 2 recommended (interrupt capable)
+
+<Warning>
+  Ensure proper voltage levels. N64 uses 3.3V, which is compatible with Pico but may require level shifting for 5V Arduino boards.
+</Warning>
+
+## Usage Example
+
+```cpp
+#include "comms/N64Backend.hpp"
+
+const Pinout pinout = {
+    .joybus_data = 28,
+};
+
+static InputState inputs;
+static InputSource *input_sources[] = { &gpio_input };
+size_t input_source_count = 1;
+
+// Pico
+N64Backend n64_backend(
+    inputs,
+    input_sources,
+    input_source_count,
+    pinout.joybus_data
+);
+
+// Arduino
+N64Backend n64_backend(
+    inputs,
+    input_sources,
+    input_source_count,
+    240,              // 240 Hz polling
+    2                 // Pin 2
+);
+
+void loop() {
+    n64_backend.SendReport();
+}
+```
+
+## Console Detection
+
+The N64 backend can be automatically selected based on console detection:
+
+```cpp
+CommunicationBackendConfig backend_config = {
+    .backend_id = COMMS_BACKEND_N64,
+};
+```
+
+## Performance Notes
+
+- **Pico**: Uses hardware PIO for precise timing, minimal CPU overhead
+- **Arduino**: Software-based, requires careful timing calibration
+- **Polling rates**: N64 supports variable rates (60-240 Hz)
+- **Input lag**: Typically under 1ms with proper configuration
+
+## Differences from GameCube Backend
+
+| Feature | N64 | GameCube |
+|---------|-----|----------|
+| Analog range | Signed 8-bit (-128 to +127) | Unsigned 8-bit (0-255) |
+| C-buttons | Digital (4 buttons) | Analog C-stick |
+| Triggers | Digital only | Digital + Analog |
+| Polling timing | Single wait | Start + End detection |
+| Default polling | 60-240 Hz | 125-200 Hz |
+
+## Troubleshooting
+
+<Note>
+  If the console doesn't detect the controller:
+  - Check data pin connection and pull-up resistor
+  - Verify voltage levels (3.3V)
+  - Ensure polling rate matches console expectations
+  - Check for proper grounding between controller and console
+  - Try cleaning the controller port contacts
+</Note>
+
+## Advanced: Polling Rate Optimization
+
+For Arduino, optimize the polling rate based on your use case:
+
+```cpp
+// For most games (60 Hz)
+N64Backend n64_backend(inputs, input_sources, count, 60, 2);
+
+// For fast-paced games (higher rate)
+N64Backend n64_backend(inputs, input_sources, count, 240, 2);
+
+// Disable delay (advanced, may cause timing issues)
+N64Backend n64_backend(inputs, input_sources, count, 0, 2);
+```
+
+## See Also
+
+- [GamecubeBackend](/api/comms/gamecube) - Similar Joybus protocol for GameCube
+- [Communication Backends](/usage/communication-backends) - Backend selection guide
+- [Pinouts](/hardware/pinouts) - Hardware pin mapping

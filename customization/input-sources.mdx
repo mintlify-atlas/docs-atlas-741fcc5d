@@ -1,0 +1,355 @@
+---
+title: Input Sources
+description: Configure various input sources including GPIO buttons, switch matrices, Nunchuk, and GameCube controllers
+---
+
+HayBox supports several input sources that can be read from to update the input state. Multiple input sources can be combined to create mixed input controllers (e.g., left hand uses a Nunchuk for movement, right hand uses buttons for other controls).
+
+## Available Input Sources
+
+HayBox provides four main types of input sources:
+
+<CardGroup cols={2}>
+  <Card title="GpioButtonInput" icon="toggle-on">
+    Read switches/buttons connected directly to GPIO pins
+  </Card>
+  <Card title="SwitchMatrixInput" icon="table-cells">
+    Scan a keyboard-style switch matrix
+  </Card>
+  <Card title="NunchukInput" icon="gamepad">
+    Read inputs from a Wii Nunchuk via I2C
+  </Card>
+  <Card title="GamecubeControllerInput" icon="gamepad-modern">
+    Read inputs from a GameCube controller (Pico only)
+  </Card>
+</CardGroup>
+
+## Scan Speed
+
+Each input source has a "scan speed" value which indicates roughly how long it takes to read inputs:
+
+- **FAST** - Read at the last possible moment for minimal latency (e.g., GPIO buttons, switch matrix)
+- **MEDIUM** - Moderate reading speed
+- **SLOW** - Takes longer to read, ideal to run continuously on a separate core (e.g., Nunchuk, GameCube controller)
+
+<Note>
+Fast input sources are always read at the last possible moment (at least on Pico), resulting in very low latency. Slow input sources are typically read long before they are needed and are best run on a separate core using `setup1()` and `loop1()`.
+</Note>
+
+## GpioButtonInput
+
+The most commonly used input source for reading switches/buttons connected directly to GPIO pins.
+
+### Configuration
+
+Define your button mappings as an array of `GpioButtonMapping`:
+
+<CodeGroup>
+```cpp config/pico/config.cpp
+GpioButtonMapping button_mappings[] = {
+    { BTN_LF1, 2  },
+    { BTN_LF2, 3  },
+    { BTN_LF3, 4  },
+    { BTN_LF4, 5  },
+    { BTN_LF5, 1  },
+
+    { BTN_LT1, 6  },
+    { BTN_LT2, 7  },
+
+    { BTN_MB1, 0  },
+    { BTN_MB2, 10 },
+    { BTN_MB3, 11 },
+
+    { BTN_RT1, 14 },
+    { BTN_RT2, 15 },
+    { BTN_RT3, 13 },
+    { BTN_RT4, 12 },
+    { BTN_RT5, 16 },
+
+    { BTN_RF1, 26 },
+    { BTN_RF2, 21 },
+    { BTN_RF3, 19 },
+    { BTN_RF4, 17 },
+
+    { BTN_RF5, 27 },
+    { BTN_RF6, 22 },
+    { BTN_RF7, 20 },
+    { BTN_RF8, 18 },
+};
+const size_t button_count = sizeof(button_mappings) / sizeof(GpioButtonMapping);
+
+DebouncedGpioButtonInput<button_count> gpio_input(button_mappings);
+```
+</CodeGroup>
+
+### Button Naming Convention
+
+- `BTN_LF1-8` - Left Face buttons 1-8
+- `BTN_LT1-6` - Left Thumb buttons 1-6
+- `BTN_MB1-12` - Middle buttons 1-12
+- `BTN_RT1-7` - Right Thumb buttons 1-7
+- `BTN_RF1-12` - Right Face buttons 1-12
+
+<Warning>
+Any buttons that your controller doesn't have can simply be deleted from the list.
+</Warning>
+
+### Usage in Config
+
+Create the input source and add it to your backends:
+
+```cpp config/pico/config.cpp
+static InputSource *input_sources[] = {};
+size_t input_source_count = sizeof(input_sources) / sizeof(InputSource *);
+
+backend_count = initialize_backends(
+    backends, 
+    inputs, 
+    input_sources, 
+    input_source_count, 
+    config, 
+    pinout
+);
+```
+
+## SwitchMatrixInput
+
+Scans a keyboard-style switch matrix instead of individual switches. This is more efficient for controllers with many buttons.
+
+### Configuration
+
+Define the matrix dimensions, pins, and button layout:
+
+<CodeGroup>
+```cpp config/c53/config.cpp
+const size_t num_rows = 5;
+const size_t num_cols = 13;
+const uint row_pins[num_rows] = { 20, 19, 18, 17, 16 };
+const uint col_pins[num_cols] = { 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0 };
+
+// Define the matrix layout
+const Button matrix[num_rows][num_cols] = {
+    {BTN_LF8,   BTN_LF7,  BTN_LF6,  BTN_LF5, NA, BTN_MB3,  BTN_MB1,  BTN_MB2,  NA, BTN_RF5, BTN_RF6,  BTN_RF7,  BTN_RF8 },
+    { BTN_LF4,  BTN_LF3,  BTN_LF2,  BTN_LF1, NA, BTN_MB4,  BTN_MB5,  BTN_MB6,  NA, BTN_RF1, BTN_RF2,  BTN_RF3,  BTN_RF4 },
+    { BTN_LF12, BTN_LF11, BTN_LF10, BTN_LF9, NA, BTN_MB7,  BTN_MB8,  BTN_MB9,  NA, BTN_RF9, BTN_RF10, BTN_RF11, BTN_RF12},
+    { NA,       BTN_LT5,  BTN_LT4,  BTN_LT3, NA, BTN_MB10, BTN_MB11, BTN_MB12, NA, BTN_RT3, BTN_RT4,  BTN_RT5,  NA      },
+    { NA,       NA,       BTN_LT1,  BTN_LT2, NA, BTN_LT6,  BTN_RT7,  BTN_RT6,  NA, BTN_RT2, BTN_RT1,  NA,       NA      },
+};
+
+const DiodeDirection diode_direction = DiodeDirection::COL2ROW;
+
+SwitchMatrixInput<num_rows, num_cols> matrix_input(
+    row_pins, 
+    col_pins, 
+    matrix, 
+    diode_direction
+);
+```
+</CodeGroup>
+
+### Diode Direction
+
+Specify the direction of your diodes:
+
+- `DiodeDirection::COL2ROW` - Diodes point from columns to rows
+- `DiodeDirection::ROW2COL` - Diodes point from rows to columns
+
+<Note>
+Use `NA` (Not Assigned) for empty positions in the matrix where no button exists.
+</Note>
+
+### Scan Speed
+
+`SwitchMatrixInput` returns `InputScanSpeed::FAST`, making it suitable for low-latency reading.
+
+## NunchukInput
+
+Reads inputs from a Wii Nunchuk using I2C communication. This is ideal for mixed input controllers where one hand uses analog stick movement.
+
+### Configuration
+
+<CodeGroup>
+```cpp Pico Configuration
+NunchukInput *nunchuk = nullptr;
+
+void setup1() {
+    while (backends == nullptr) {
+        tight_loop_contents();
+    }
+
+    // Initialize Nunchuk on core1
+    nunchuk = new NunchukInput(Wire, -1, 4, 5);
+}
+
+void loop1() {
+    if (backends != nullptr) {
+        nunchuk->UpdateInputs(backends[0]->GetInputs());
+    }
+}
+```
+</CodeGroup>
+
+### Constructor Parameters
+
+```cpp
+NunchukInput(
+    TwoWire &wire = Wire,     // I2C wire interface
+    int detect_pin = -1,      // Optional detection pin
+    int sda_pin = 4,          // I2C SDA pin
+    int scl_pin = 5           // I2C SCL pin
+)
+```
+
+### Scan Speed
+
+`NunchukInput` returns `InputScanSpeed::SLOW`, so it should be read continuously on a separate core (see [Dual-Core Setup](/customization/dual-core)).
+
+<Warning>
+Nunchuk reading is slow due to I2C communication. Always run it on the Pico's second core for optimal performance.
+</Warning>
+
+## GamecubeControllerInput
+
+Reads inputs from a GameCube controller. Only available on Pico/RP2040.
+
+### Configuration
+
+<CodeGroup>
+```cpp Dual-Core Example
+GamecubeControllerInput *gcc = nullptr;
+
+void setup1() {
+    while (backends == nullptr) {
+        tight_loop_contents();
+    }
+
+    gcc = new GamecubeControllerInput(
+        28,      // data pin
+        2500,    // polling rate (Hz)
+        pio1     // use pio1 to avoid conflicts
+    );
+}
+
+void loop1() {
+    if (backends != nullptr) {
+        gcc->UpdateInputs(backends[0]->GetInputs());
+    }
+}
+```
+</CodeGroup>
+
+### Constructor Parameters
+
+```cpp
+GamecubeControllerInput(
+    uint data_pin,            // GPIO pin for data line
+    uint polling_rate,        // Polling rate in Hz (e.g., 2500)
+    PIO pio = pio0,          // PIO instance (use pio1 if GamecubeBackend uses pio0)
+    int sm = -1,             // State machine (-1 for auto)
+    int offset = -1          // Memory offset (-1 for auto)
+)
+```
+
+### Scan Speed
+
+`GamecubeControllerInput` returns `InputScanSpeed::SLOW`. Run it on core1 for best performance.
+
+<Note>
+When using both `GamecubeControllerInput` and `GamecubeBackend`, make sure they use different PIO instances (pio0 and pio1) or the same PIO instruction memory offset to avoid conflicts.
+</Note>
+
+## Combining Multiple Input Sources
+
+You can combine multiple input sources to create mixed input controllers:
+
+<Tabs>
+  <Tab title="GPIO + Nunchuk">
+    ```cpp config.cpp
+    // GPIO buttons for right hand
+    DebouncedGpioButtonInput<button_count> gpio_input(button_mappings);
+    
+    // Nunchuk for left hand (on core1)
+    NunchukInput *nunchuk = nullptr;
+    
+    void setup() {
+        static InputState inputs;
+        gpio_input.UpdateInputs(inputs);
+        
+        static InputSource *input_sources[] = {};
+        backend_count = initialize_backends(
+            backends, inputs, input_sources, 0, config, pinout
+        );
+    }
+    
+    void setup1() {
+        while (backends == nullptr) {
+            tight_loop_contents();
+        }
+        nunchuk = new NunchukInput();
+    }
+    
+    void loop1() {
+        if (backends != nullptr) {
+            gpio_input.UpdateInputs(backends[0]->GetInputs());
+            nunchuk->UpdateInputs(backends[0]->GetInputs());
+        }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Matrix + GameCube">
+    ```cpp config.cpp
+    // Switch matrix
+    SwitchMatrixInput<num_rows, num_cols> matrix_input(
+        row_pins, col_pins, matrix, diode_direction
+    );
+    
+    // GameCube controller input
+    GamecubeControllerInput *gcc = nullptr;
+    
+    void setup() {
+        static InputState inputs;
+        matrix_input.UpdateInputs(inputs);
+        
+        backend_count = initialize_backends(
+            backends, inputs, nullptr, 0, config, pinout
+        );
+    }
+    
+    void setup1() {
+        while (backends == nullptr) {
+            tight_loop_contents();
+        }
+        gcc = new GamecubeControllerInput(28, 2500, pio1);
+    }
+    
+    void loop1() {
+        if (backends != nullptr) {
+            matrix_input.UpdateInputs(backends[0]->GetInputs());
+            gcc->UpdateInputs(backends[0]->GetInputs());
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Backend Integration
+
+Input sources work with communication backends through the `initialize_backends()` function:
+
+```cpp
+backend_count = initialize_backends(
+    backends,              // Communication backends array
+    inputs,               // Input state
+    input_sources,        // Array of input sources
+    input_source_count,   // Number of input sources
+    config,               // Configuration
+    pinout                // Pin mappings
+);
+```
+
+The communication backend decides when to read which input sources, because inputs need to be read at different points in time for different backends.
+
+<Note>
+You can use multiple communication backends at once. For example, most configs use the B0XX input viewer backend as a secondary backend when the DInput backend is active.
+</Note>
